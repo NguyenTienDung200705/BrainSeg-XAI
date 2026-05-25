@@ -4,7 +4,7 @@ Hệ thống AI phân tích khối u não từ ảnh MRI với khả năng giả
 
 ---
 
-##  Kiến trúc hệ thống
+## 🏗️ Kiến trúc hệ thống
 
 ```
 MRI Image Upload
@@ -24,7 +24,7 @@ MRI Image Upload
 
 ---
 
-## Chạy nhanh (Development)
+## 🚀 Chạy nhanh (Development)
 
 ### 1. Backend (FastAPI)
 
@@ -51,7 +51,7 @@ Web: http://localhost:3000
 
 ---
 
-## Docker (Production)
+## 🐳 Docker (Production)
 
 ```bash
 # Copy weights trước
@@ -66,7 +66,7 @@ API: http://localhost:8000
 
 ---
 
-## Cấu trúc thư mục
+## 📂 Cấu trúc thư mục
 
 ```
 brain-tumor-ai/
@@ -108,7 +108,7 @@ brain-tumor-ai/
 
 ---
 
-##  API Endpoints
+## 🔌 API Endpoints
 
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
@@ -119,30 +119,14 @@ brain-tumor-ai/
 
 ```json
 {
-  "original_b64": "...",
-  "mask_b64": "...",
-  "overlay_b64": "...",
-  "heatmap_b64": "...",
-  "cam_overlay_b64": "...",
   "features": {
     "tumor_detected": true,
     "tumor_area_cm2": 4.2,
-    "occupancy_ratio": 12.5,
-    "shape_irregularity": 0.65,
-    "compactness": 0.35,
-    "boundary_complexity": 11.2,
-    "midline_shift": false,
-    "location": "thùy đỉnh/thái dương, bên trái",
-    "num_regions": 1
+    "occupancy_ratio": 12.5
   },
   "risk": {
-    "risk_level": "Cao",
-    "risk_score": 55,
-    "severity": "Nghiêm trọng",
-    "risk_color": "#ff6b35",
-    "fired_rules": ["..."],
-    "recommendations": ["..."],
-    "explanation": "..."
+    "risk_level": "High",
+    "severity": "Severe"
   }
 }
 ```
@@ -156,6 +140,28 @@ Backend hỗ trợ 3 định dạng checkpoint:
 
 ---
 
+---
+
+## 🧪 Technologies Used
+
+### AI & Deep Learning
+- PyTorch
+- U-Net
+- Grad-CAM
+- OpenCV
+
+### Backend
+- FastAPI
+- Uvicorn
+
+### Frontend
+- React
+- Axios
+
+### Deployment
+- Docker
+- Docker Compose
+
 ## 📊 Dataset
 
 **LGG MRI Segmentation** (Kaggle):
@@ -164,6 +170,15 @@ Backend hỗ trợ 3 định dạng checkpoint:
 - Ground truth segmentation masks
 
 ---
+
+## 👨‍💻 Author
+
+Nguyen Tien Dung
+
+- AI
+- Computer Vision
+- Medical Imaging
+- Explainable AI
 
 ## ⚠️ Disclaimer
 
