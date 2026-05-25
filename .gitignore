@@ -1,0 +1,94 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# Environment variables
+.env
+.env.*
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# =========================
+# AI / ML
+# =========================
+datasets/
+data/
+weights/
+models/
+checkpoints/
+runs/
+outputs/
+results/
+logs/
+
+# Model files
+*.pt
+*.pth
+*.onnx
+*.h5
+*.ckpt
+*.pkl
+
+# =========================
+# FastAPI / Backend
+# =========================
+*.sqlite3
+*.db
+
+# =========================
+# React / Frontend
+# =========================
+node_modules/
+build/
+dist/
+coverage/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# Docker
+# =========================
+*.tar
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.temp
+*.log
+
+# =========================
+# Cache
+# =========================
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+# =========================
+# Misc
+# =========================
+*.zip
+*.rar
