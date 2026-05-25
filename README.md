@@ -53,18 +53,18 @@ Web: http://localhost:3000
 
 ## Docker (Production)
 
-<!-- ```bash
+```bash
 # Copy weights trước
-cp your_model.pth backend/weights/unet_best.pth -->
+cp your_model.pth backend/weights/unet_best.pth
 
 # Build & run
 docker-compose up --build
 
-# Web: http://localhost:3000
-# API: http://localhost:8000
+Web: http://localhost:3000
+API: http://localhost:8000
 ```
 
-<!-- ---
+---
 
 ## Cấu trúc thư mục
 
@@ -103,7 +103,7 @@ brain-tumor-ai/
 ├── notebooks/
 │   └── training.ipynb              # U-Net training notebook
 │
-└── docker-compose.yml -->
+└── docker-compose.yml
 ```
 
 ---
