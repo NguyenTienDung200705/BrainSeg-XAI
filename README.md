@@ -140,8 +140,6 @@ Backend hỗ trợ 3 định dạng checkpoint:
 
 ---
 
----
-
 ## 🧪 Technologies Used
 
 ### AI & Deep Learning
@@ -164,6 +162,8 @@ Backend hỗ trợ 3 định dạng checkpoint:
 
 ## 📊 Dataset
 
+---
+
 **LGG MRI Segmentation** (Kaggle):
 - Link: https://www.kaggle.com/datasets/mateuszbuda/lgg-mri-segmentation
 - 3,929 ảnh MRI não
@@ -179,6 +179,8 @@ Nguyen Tien Dung
 - Computer Vision
 - Medical Imaging
 - Explainable AI
+
+---
 
 ## ⚠️ Disclaimer
 
