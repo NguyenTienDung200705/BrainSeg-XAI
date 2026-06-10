@@ -209,7 +209,8 @@
  \def\@title{#2}%
  \def\ttitle{#2}%
 }
-\DeclareDocumentCommand{\author}{m}{\newcommand{\authorname}{#1}\renewcommand{\@author}{#1}}
+\newcommand{\authorname}{}
+\DeclareDocumentCommand{\author}{m}{\renewcommand{\authorname}{#1}\renewcommand{\@author}{#1}}
 \NewDocumentCommand{\supervisor}{m}{\newcommand{\supname}{#1}}
 \NewDocumentCommand{\supervisorr}{m}{\newcommand{\supnamee}{#1}}
 \NewDocumentCommand{\program}{m}{\newcommand{\progname}{#1}}
