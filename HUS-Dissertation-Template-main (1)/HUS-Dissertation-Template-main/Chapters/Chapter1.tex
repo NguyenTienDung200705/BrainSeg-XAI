@@ -12,7 +12,7 @@
 
 %----------------------------------------------------------------------------------------
 
-\section{Bối cảnh và động lực nghiên cứu}
+\section{Giới thiệu bài toán}
 
 U não là nhóm bệnh lý ác tính có tỷ lệ tử vong cao và diễn tiến nhanh. U thần kinh đệm độ cao (glioblastoma multiforme, GBM) có trung vị thời gian sống sau chẩn đoán chỉ khoảng 14--16 tháng ngay cả khi được phẫu thuật, xạ trị và hóa trị kết hợp \cite{Menze2015}. Ở nhóm u thần kinh đệm độ thấp (LGG), tiên lượng khả quan hơn song bệnh nhân vẫn đối mặt với nguy cơ tiến triển sang thể ác tính cao. Thời điểm phát hiện bệnh đóng vai trò then chốt: u được chẩn đoán ở giai đoạn sớm, khi kích thước còn nhỏ và chưa xâm lấn các cấu trúc quan trọng, cho phép can thiệp triệt để hơn và cải thiện tiên lượng đáng kể.
 
@@ -22,18 +22,18 @@ Các mô hình học sâu và đặc biệt là các mạng nơ-ron tích chập
 
 \begin{figure}[h!]
     \centering
-    \subfigure[Ảnh MRI não (T1-Gd, axial)]{
+    \subfigure[Ảnh MRI não]{
         \includegraphics[width=0.30\textwidth]{Figures/Gallery/BrainMRI.png}
     }
     \hspace{4pt}
-    \subfigure[Mặt nạ phân đoạn (ground truth)]{
+    \subfigure[Mặt nạ phân đoạn]{
         \includegraphics[width=0.30\textwidth]{Figures/Gallery/Tumor_Mask.png}
     }
     \hspace{4pt}
-    \subfigure[Overlay: vùng khối u (xanh lá)]{
+    \subfigure[Overlay: vùng khối U]{
         \includegraphics[width=0.30\textwidth]{Figures/Gallery/BrainMRI_overlay.png}
     }
-    \caption{Ví dụ một mẫu từ bộ dữ liệu LGG MRI Segmentation \cite{Buda2019}: ảnh MRI gốc (trái), mặt nạ nhị phân do chuyên gia chú thích (giữa) và overlay vùng khối u trên ảnh gốc (phải).}
+    \caption{Ví dụ một mẫu từ bộ dữ liệu LGG MRI Segmentation \cite{Buda2019}.}
     \label{fig:mri_example}
 \end{figure}
 

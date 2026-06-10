@@ -26,6 +26,8 @@ chapterinoneline,
 \usepackage{mathptmx}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{placeins}
+\usepackage{float}
 \allowdisplaybreaks
 
 \usepackage[backend=bibtex,style=numeric,citestyle=ieee,natbib=true]{biblatex}
@@ -77,7 +79,7 @@ chapterinoneline,
 %	PHẦN 3: THÔNG TIN VỀ TIỂU LUẬN
 %----------------------------------------------------------------------------------------
 
-\thesistitle{BrainSeg-XAI: Hệ thống Phân đoạn Khối u Não từ Ảnh MRI sử dụng Học Sâu và Trí tuệ Nhân tạo Có thể Giải thích}
+\thesistitle{PHƯƠNG PHÁP PHÂN ĐOẠN KHỐI U NÃO DỰA TRÊN KIẾN TRÚC UNET CẢI TIẾN CÓ KHẢ NĂNG GIẢI THÍCH}
 
 \supervisor{GS.TS. Nguyễn Thế Toàn}
 \supervisorr{CN. Vi Anh Quân}
@@ -116,13 +118,13 @@ chapterinoneline,
 %	PHẦN 5: DANH NGÔN
 %----------------------------------------------------------------------------------------
 
-\vspace*{0.2\textheight}
+% \vspace*{0.2\textheight}
 
-\noindent\enquote{\itshape
-	The goal is to turn data into information, and information into insight.
-}\bigbreak
+% \noindent\enquote{\itshape
+% 	The goal is to turn data into information, and information into insight.
+% }\bigbreak
 
-\hfill Carly Fiorina
+% \hfill Carly Fiorina
 
 
 %----------------------------------------------------------------------------------------
@@ -133,13 +135,15 @@ chapterinoneline,
 	\addchaptertocentry{\acknowledgementname}
 	\thispagestyle{empty}
 
-	Em xin bày tỏ lòng biết ơn chân thành đến giảng viên hướng dẫn, người đã tận tình định hướng và hỗ trợ em trong suốt quá trình thực hiện tiểu luận này.
+	Trong quá trình thực hiện môn học Nhập môn trí tuệ nhân tạo để hoàn thành bài báo cáo này, nhóm em đã nhận được sự hướng dẫn tận tình, sự quan tâm sâu sắc và những hỗ trợ quý báu từ thầy Nguyễn Thế Toàn và thầy Vi Anh Quân. Nhóm em xin gửi lời cảm ơn chân thành và sâu sắc đến các thầy vì đã luôn đồng hành, định hướng và hỗ trợ nhóm em trong suốt quá trình học tập cũng như triển khai đề tài.
+
+	Mặc dù đã cố gắng hoàn thiện bài báo cáo một cách tốt nhất trong khả năng của mình, nhưng do hạn chế về kiến thức và kinh nghiệm thực tiễn nên không thể tránh khỏi những thiếu sót. Nhóm em rất mong nhận được những ý kiến đóng góp, nhận xét và chỉ dẫn thêm từ các thầy để có thể tiếp tục hoàn thiện báo cáo trong thời gian tới.
 
 	Đề tài \textit{BrainSeg-XAI} là cơ hội để em ứng dụng kiến thức học sâu và trí tuệ nhân tạo vào bài toán y tế có giá trị thực tiễn cao: phân đoạn khối u não từ ảnh MRI. Trong quá trình xây dựng hệ thống, em đã học hỏi được nhiều kinh nghiệm quý báu về thiết kế mô hình học sâu, triển khai dịch vụ web, và xây dựng hệ thống AI có khả năng giải thích được kết quả dự đoán.
 
-	Em cũng xin gửi lời cảm ơn đến cộng đồng mã nguồn mở đã cung cấp các thư viện PyTorch, segmentation-models-pytorch, FastAPI và React -- những nền tảng kỹ thuật quan trọng giúp hiện thực hóa ý tưởng của đề tài.
+	Cuối cùng, nhóm em xin kính chúc thầy Phạm Thế Toàn và thầy Vi Anh Quân luôn mạnh khỏe, hạnh phúc và đạt được nhiều thành công trong sự nghiệp giảng dạy và nghiên cứu khoa học.
 
-	Em nhận thức rõ những hạn chế còn tồn tại trong bài làm và rất mong nhận được ý kiến đóng góp từ thầy/cô để tiếp tục cải thiện chất lượng nghiên cứu trong tương lai.
+	Nhóm em xin chân thành cảm ơn các thầy!
 \end{acknowledgements}
 
 
@@ -232,8 +236,7 @@ $S_{\text{risk}}$ & Điểm rủi ro tổng hợp ($0$--$100$)            & --\\
 %----------------------------------------------------------------------------------------
 %	PHẦN 13: TÀI LIỆU THAM KHẢO
 %----------------------------------------------------------------------------------------
-
-\begin{spacing}{1.15}
+\nocite{*}\begin{spacing}{1.15}
 	\printbibliography[heading=bibintoc, title=Tài liệu tham khảo]
 \end{spacing}
 

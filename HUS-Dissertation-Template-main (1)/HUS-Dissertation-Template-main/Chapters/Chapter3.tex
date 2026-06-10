@@ -8,103 +8,67 @@
 
 \section{Tổng quan kiến trúc hệ thống}
 
-BrainSeg-XAI được xây dựng theo mô hình client-server: backend FastAPI \cite{FastAPI2024} xử lý toàn bộ logic AI và trả về kết quả qua REST API; frontend React \cite{React2024} đảm nhiệm giao diện người dùng. Pipeline xử lý đi qua tám giai đoạn kế tiếp nhau, từ khi nhận yêu cầu HTTP đến khi trả về JSON cuối cùng:
-
-\begin{enumerate}
-    \item \textbf{Tiếp nhận và xác thực yêu cầu} -- endpoint kiểm tra định dạng và kích thước file.
-    \item \textbf{Tiền xử lý ảnh} -- chuẩn hóa về $256\times256$, ImageNet normalization, tensor hóa.
-    \item \textbf{Tải và nhận dạng mô hình} -- lazy loading, tự động phân biệt checkpoint vanilla/SMP.
-    \item \textbf{Suy luận mô hình} -- forward pass, sigmoid, tạo mặt nạ nhị phân.
-    \item \textbf{Tạo bản đồ Grad-CAM} -- backward pass qua hooks, tổng hợp bản đồ nhiệt.
-    \item \textbf{Trích xuất đặc trưng hình thái} -- connected components, regionprops, đặc trưng hình dạng.
-    \item \textbf{Đánh giá rủi ro lâm sàng} -- bộ máy sáu quy tắc, additive scoring.
-    \item \textbf{Xây dựng phản hồi và hiển thị} -- mã hóa base64, JSON response, React render.
-\end{enumerate}
-
-\subsection{Cấu trúc thư mục dự án}
-
-Cấu trúc thư mục phản ánh trực tiếp sự phân chia trách nhiệm giữa các module:
-
-\vspace{6pt}
-\noindent
-{\small
-\setlength{\DTbaselineskip}{14pt}
-\dirtree{%
-.1 BrainSeg-XAI/.
-.2 backend/.
-.3 app/.
-.4 api/ \hspace{3pt} \textit{predict.py -- REST endpoint}.
-.4 models/ \hspace{3pt} \textit{unet.py -- UNet \& SMP wrapper}.
-.4 services/ \hspace{3pt} \textit{inference.py, feature\_extraction.py}.
-.4 xai/ \hspace{3pt} \textit{gradcam.py -- Grad-CAM hooks}.
-.4 rules/ \hspace{3pt} \textit{medical\_rules.py -- bộ máy luật}.
-.4 utils/ \hspace{3pt} \textit{image\_utils.py -- tiền xử lý}.
-.4 main.py \hspace{3pt} \textit{FastAPI app + CORS}.
-.3 weights/ \hspace{3pt} \textit{unet\_best.pth}.
-.3 requirements.txt.
-.2 frontend/.
-.3 src/components/ \hspace{3pt} \textit{ImageViewer, RiskPanel, ...}.
-.3 src/services/ \hspace{3pt} \textit{api.js -- Axios client}.
-.3 src/App.js \hspace{3pt} \textit{root component}.
-.2 notebooks/ \hspace{3pt} \textit{training.ipynb, quick\_retrain.py}.
-.2 docker-compose.yml.
-.2 start.sh.
-}
-}
-\vspace{4pt}
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=1\textwidth]{Figures/Chapter/Chapter5.png}
+    \caption{Pineline phương pháp.}
+    \label{fig:pineline}
+\end{figure}
 
 %----------------------------------------------------------------------------------------
-\section{Giai đoạn 1 -- Tiếp nhận và xác thực yêu cầu}
+\subsection{Giai đoạn 1 -- Tiếp nhận và xác thực yêu cầu}
 %----------------------------------------------------------------------------------------
 
-\subsection{Endpoint REST}
+\subsection*{1. Endpoint REST}
 
 Endpoint duy nhất cho dự đoán là \texttt{POST /api/v1/predict}, định nghĩa trong \texttt{app/api/predict.py}. FastAPI nhận file qua \texttt{multipart/form-data} nhờ khai báo \texttt{UploadFile = File(...)}.
 
-\subsection{Các bước xác thực đầu vào}
+\subsection*{2. Input MRI}
 
-Trước khi chuyển sang giai đoạn xử lý, ba kiểm tra được thực hiện tuần tự:
+Trước khi dữ liệu được đưa vào pipeline xử lý chính, hệ thống tiến hành một chuỗi kiểm tra nhằm đảm bảo tính hợp lệ và an toàn của tệp đầu vào. Các bước kiểm tra được thực hiện theo thứ tự như sau:
 
 \begin{sloppypar}
 \begin{enumerate}
-    \item \textbf{Kiểm tra MIME type}: \texttt{file.content\_type} phải bắt đầu bằng \texttt{"image/"}. Vi phạm trả về HTTP 400.
-    \item \textbf{Kiểm tra kích thước}: Đọc toàn bộ bytes vào RAM (\texttt{raw = await file.read()}), nếu \texttt{len(raw) > 20\,MB} trả về HTTP 413.
-    \item \textbf{Kiểm tra tính hợp lệ của ảnh}: Pillow thử mở bytes; nếu không hợp lệ bắt ngoại lệ và trả về HTTP 422.
+    \item \textbf{Kiểm tra loại MIME}: Hệ thống xác minh trường \texttt{file.content\_type} phải thuộc nhóm \texttt{"image/"}. Nếu điều kiện không được thỏa mãn, yêu cầu sẽ bị từ chối với mã lỗi HTTP 400.
+
+    \item \textbf{Kiểm tra dung lượng tệp}: Toàn bộ dữ liệu được đọc vào bộ nhớ thông qua lệnh \texttt{raw = await file.read()}. Nếu kích thước vượt quá ngưỡng 20\,MB (\texttt{len(raw) > 20\,MB}), hệ thống trả về mã lỗi HTTP 413 để hạn chế tải tài nguyên.
+
+    \item \textbf{Kiểm tra tính toàn vẹn của ảnh}: Thư viện Pillow được sử dụng để thử mở dữ liệu ảnh. Trong trường hợp tệp bị hỏng hoặc không đúng định dạng, một ngoại lệ sẽ được kích hoạt và hệ thống phản hồi mã lỗi HTTP 422.
 \end{enumerate}
 \end{sloppypar}
-
-Thiết kế đọc file vào bộ nhớ trước khi xác thực kích thước là đánh đổi cố ý: với giới hạn 20 MB, chi phí bộ nhớ chấp nhận được nhưng loại bỏ hoàn toàn nhu cầu lưu file tạm ra đĩa.
-
 %----------------------------------------------------------------------------------------
-\section{Giai đoạn 2 -- Tiền xử lý ảnh}
+\subsection{Giai đoạn 2 -- Tiền xử lý ảnh}
 %----------------------------------------------------------------------------------------
 
-\subsection{Chuỗi biến đổi}
+\subsection*{1. Chuỗi biến đổi}
 
-Module \texttt{utils/image\_utils.py} thực hiện bốn bước biến đổi tuần tự trên ảnh thô:
+Module \texttt{utils/image\_utils.py} thực hiện một chuỗi bốn bước xử lý tuần tự nhằm biến đổi ảnh thô thành định dạng đầu vào phù hợp cho mô hình học sâu.
 
 \begin{sloppypar}
 \begin{enumerate}
-    \item \textbf{Giải mã và chuẩn hóa không gian màu}: Pillow đọc bytes qua \texttt{Image.open(BytesIO(raw))} và chuyển về RGB. Bước này đảm bảo ảnh grayscale hay RGBA đều được chuẩn hóa về 3 kênh.
-    \item \textbf{Resize về $256\times256$}: Sử dụng nội suy bilinear (\texttt{cv2.INTER\_LINEAR}) -- cân bằng giữa tốc độ và chất lượng, phù hợp cho ảnh y tế với vùng chuyển tiếp mềm mại.
-    \item \textbf{Chuẩn hóa ImageNet}: Chuyển pixel sang float32, chia 255, trừ mean, chia std:
+    \item \textbf{Giải mã và chuẩn hóa không gian màu}: Dữ liệu ảnh được đọc từ byte stream thông qua \texttt{Image.open(BytesIO(raw))} của Pillow. Sau đó, ảnh được chuyển về định dạng RGB để đảm bảo tính nhất quán giữa các trường hợp ảnh đầu vào như grayscale, RGB hoặc RGBA, tất cả đều được đưa về ba kênh màu chuẩn.
+
+    \item \textbf{Thay đổi kích thước ảnh}: Ảnh được resize về kích thước cố định $256 \times 256$ bằng phương pháp nội suy bilinear (\texttt{cv2.INTER\_LINEAR}). Lựa chọn này giúp cân bằng giữa chi phí tính toán và khả năng giữ lại cấu trúc hình ảnh, đặc biệt phù hợp với dữ liệu y tế có biên chuyển tiếp mềm.
+
+    \item \textbf{Chuẩn hóa theo ImageNet}: Giá trị pixel được chuyển sang kiểu float32, chuẩn hóa về khoảng [0,1], sau đó áp dụng chuẩn hóa theo thống kê ImageNet:
     \begin{equation}
         x'_c = \frac{x_c / 255 - \mu_c}{\sigma_c}, \quad
         \boldsymbol{\mu} = [0.485,\,0.456,\,0.406], \quad
         \boldsymbol{\sigma} = [0.229,\,0.224,\,0.225]
         \label{eq:imagenet_norm}
     \end{equation}
-    Chuẩn hóa ImageNet là bắt buộc vì encoder EfficientNet-B4 được pretrained trên ImageNet với phân phối này; đưa ảnh vào phân phối khác sẽ gây degradation đặc trưng.
-    \item \textbf{Tensor hóa và thêm chiều batch}: Dùng \texttt{np.transpose} đổi HWC thành CHW, chuyển sang \texttt{torch.FloatTensor} và gọi \texttt{.unsqueeze(0)}, tạo tensor $[1, 3, 256, 256]$.
+    Việc sử dụng chuẩn hóa này nhằm đảm bảo đầu vào phù hợp với phân phối dữ liệu mà encoder EfficientNet-B4 đã được huấn luyện trước, giúp giảm hiện tượng lệch phân phối và cải thiện độ ổn định khi suy luận.
+
+    \item \textbf{Chuyển đổi tensor và bổ sung batch dimension}: Ảnh sau khi chuẩn hóa được chuyển từ định dạng HWC sang CHW bằng \texttt{np.transpose}, sau đó chuyển thành \texttt{torch.FloatTensor}. Cuối cùng, một chiều batch được thêm vào bằng \texttt{.unsqueeze(0)}, tạo tensor đầu vào có kích thước $[1, 3, 256, 256]$.
 \end{enumerate}
 \end{sloppypar}
 
-\subsection{Xử lý đầu ra để trực quan hóa}
+\subsection*{2. Xử lý đầu ra để trực quan hóa}
 
 Sau suy luận, mặt nạ nhị phân $\hat{M} \in \{0,1\}^{256\times256}$ được trực quan hóa bằng cách overlay: pixel khối u (\texttt{mask=1}) được tô màu xanh lá \texttt{RGB = [0, 255, 136]}, giúp phân biệt rõ với mô não xung quanh. Kết quả được mã hóa PNG qua \texttt{BytesIO} và chuyển sang base64 string.
 
 %----------------------------------------------------------------------------------------
-\section{Giai đoạn 3 -- Tải và nhận dạng mô hình}
+\subsection{Giai đoạn 3 -- Tải và nhận dạng mô hình}
 %----------------------------------------------------------------------------------------
 
 \subsection{Cơ chế lazy loading}
@@ -132,15 +96,11 @@ File \texttt{unet\_best.pth} có thể chứa hai loại kiến trúc khác nhau
 Sau khi nhận dạng, hệ thống tạo đúng instance model, tải trọng số, gọi \texttt{model.eval()} và chuyển sang \texttt{DEVICE} (CUDA nếu có, ngược lại CPU). Chi tiết mã nguồn tại Phụ lục~\ref{AppendixA}, Mục~A.5 và A.13.
 \end{sloppypar}
 
-\subsection{Demo mode}
-
-Khi file \texttt{weights/unet\_best.pth} không tồn tại, hệ thống vẫn khởi tạo một vanilla UNet với trọng số ngẫu nhiên. Toàn bộ pipeline tiếp tục hoạt động bình thường -- mặt nạ phân đoạn sẽ ngẫu nhiên, nhưng tất cả các giai đoạn sau (Grad-CAM, feature extraction, risk engine) đều chạy đầy đủ. Đây là thiết kế có chủ ý để thuận tiện kiểm thử và demo mà không cần model đã huấn luyện.
-
 %----------------------------------------------------------------------------------------
-\section{Giai đoạn 4 -- Suy luận mô hình}
+\subsection{Giai đoạn 4 -- Suy luận mô hình}
 %----------------------------------------------------------------------------------------
 
-\subsection{Forward pass và tạo mặt nạ}
+\subsection*{1. Forward pass và tạo mặt nạ}
 
 Sau khi tensor đầu vào $\mathbf{x} \in \mathbb{R}^{1 \times 3 \times 256 \times 256}$ được đưa lên đúng \texttt{DEVICE}, suy luận diễn ra trong ba bước:
 
@@ -157,15 +117,15 @@ Sau khi tensor đầu vào $\mathbf{x} \in \mathbb{R}^{1 \times 3 \times 256 \ti
 \end{enumerate}
 \end{sloppypar}
 
-\subsection{Lý do chọn ngưỡng 0.5}
+\subsection*{2. Lý do chọn ngưỡng 0.5}
 
 Ngưỡng 0.5 là giá trị trung tính mặc định của sigmoid. Trong thực tế, ngưỡng tối ưu có thể được điều chỉnh dựa trên đường cong ROC để cân bằng Precision/Recall theo yêu cầu lâm sàng (ưu tiên Recall cao hơn để giảm FN). Tuy nhiên, giá trị 0.5 được giữ nguyên để đảm bảo tính nhất quán và tái sản xuất kết quả.
 
 %----------------------------------------------------------------------------------------
-\section{Giai đoạn 5 -- Tạo bản đồ Grad-CAM}
+\subsection{Giai đoạn 5 -- Tạo bản đồ Grad-CAM}
 %----------------------------------------------------------------------------------------
 
-\subsection{Đăng ký hooks}
+\subsection*{1. Đăng ký hooks}
 
 Lớp \texttt{GradCAM} trong \texttt{xai/gradcam.py} đăng ký hai hook PyTorch ngay khi khởi tạo -- không phải mỗi lần gọi. Điều này tránh tích lũy hooks gây rò rỉ bộ nhớ và overhead:
 
@@ -182,7 +142,7 @@ Lớp mục tiêu được chọn theo loại mô hình:
     \item SMP: \texttt{model.segmentation\_head[0]} -- lớp tích chập đầu tiên trong segmentation head, là điểm hội tụ của toàn bộ thông tin decoder.
 \end{itemize}
 
-\subsection{Quy trình tạo bản đồ}
+\subsection*{2. Quy trình tạo bản đồ}
 
 Grad-CAM chạy theo quy trình tám bước cho mỗi ảnh:
 
@@ -200,14 +160,14 @@ Grad-CAM chạy theo quy trình tám bước cho mỗi ảnh:
 Bước ReLU tại bước 6 loại bỏ các ảnh hưởng âm -- những vùng \textit{ức chế} quyết định phân đoạn -- chỉ giữ lại các vùng \textit{kích hoạt} tích cực, làm cho heatmap dễ diễn giải hơn về mặt lâm sàng.
 
 %----------------------------------------------------------------------------------------
-\section{Giai đoạn 6 -- Trích xuất đặc trưng hình thái}
+\subsection{Giai đoạn 6 -- Trích xuất đặc trưng hình thái}
 %----------------------------------------------------------------------------------------
 
-\subsection{Phân tích thành phần liên thông}
+\subsection*{1. Phân tích thành phần liên thông}
 
 Module \texttt{services/feature\_extraction.py} nhận mặt nạ nhị phân $\hat{M}$ và trích xuất vector đặc trưng hình thái. Bước đầu tiên dùng \texttt{scipy.ndimage.label} để phân tách mask thành các thành phần liên thông (connected components), từ đó đếm \texttt{num\_regions} -- số vùng khối u riêng biệt phát hiện được. Đây là chỉ số quan trọng: $\texttt{num\_regions} > 1$ gợi ý khối u đa ổ.
 
-\subsection{Tính toán thuộc tính vùng}
+\subsection*{2.Tính toán thuộc tính vùng}
 
 \begin{sloppypar}
 Trên vùng khối u lớn nhất (largest component), \texttt{skimage.measure.regionprops} cung cấp:
@@ -237,7 +197,7 @@ Từ ba giá trị này, năm đặc trưng dẫn xuất được tính theo cá
     \end{tabular}
 \end{table}
 
-\subsection{Xác định vị trí giải phẫu}
+\subsection*{3. Xác định vị trí giải phẫu}
 
 Tọa độ tâm chuẩn hóa $(\hat{c}_x, \hat{c}_y) = (c_x/256, c_y/256)$ được ánh xạ sang vị trí giải phẫu xấp xỉ:
 \begin{itemize}
@@ -246,10 +206,10 @@ Tọa độ tâm chuẩn hóa $(\hat{c}_x, \hat{c}_y) = (c_x/256, c_y/256)$ đư
 \end{itemize}
 
 %----------------------------------------------------------------------------------------
-\section{Giai đoạn 7 -- Đánh giá rủi ro lâm sàng}
+\subsection{Giai đoạn 7 -- Đánh giá rủi ro lâm sàng}
 %----------------------------------------------------------------------------------------
 
-\subsection{Hệ thống phân loại cấp độ nguy hiểm}
+\subsection*{1.Hệ thống phân loại cấp độ nguy hiểm}
 
 \begin{sloppypar}
 Module \texttt{rules/medical\_rules.py} triển khai bộ máy đánh giá rủi ro theo nguyên tắc \textit{additive scoring}: mỗi trong sáu quy tắc độc lập kiểm tra một đặc trưng hình thái và cộng điểm vào biến tích lũy \texttt{score}, được giới hạn ở 100. Thiết kế này đảm bảo:
@@ -260,17 +220,17 @@ Module \texttt{rules/medical\_rules.py} triển khai bộ máy đánh giá rủi
 \end{itemize}
 \end{sloppypar}
 
-\subsection{Kết quả đánh giá}
+\subsection*{2. Kết quả đánh giá}
 
 \begin{sloppypar}
 Hàm \texttt{evaluate\_risk(features)} trả về dataclass \texttt{RuleResult} gồm: \texttt{risk\_score}, \texttt{risk\_level} (Thấp/Trung bình/Cao/Rất cao), \texttt{severity}, \texttt{risk\_color} (mã hex), \texttt{fired\_rules} (list quy tắc kích hoạt), \texttt{recommendations} (list khuyến nghị) và \texttt{explanation} (tóm tắt nguyên nhân).
 \end{sloppypar}
 
 %----------------------------------------------------------------------------------------
-\section{Giai đoạn 8 -- Xây dựng phản hồi và giao diện người dùng}
+\subsection{Giai đoạn 8 -- Xây dựng phản hồi và giao diện người dùng}
 %----------------------------------------------------------------------------------------
 
-\subsection{Đóng gói JSON response}
+\subsection*{1. Đóng gói JSON response}
 
 Sau khi hoàn thành các giai đoạn 1--7, hàm \texttt{predict()} trong \texttt{services/inference.py} đóng gói kết quả thành từ điển Python, FastAPI tự động serialize sang JSON:
 
@@ -280,7 +240,7 @@ Sau khi hoàn thành các giai đoạn 1--7, hàm \texttt{predict()} trong \text
     \item \textbf{risk}: Cấu trúc \texttt{RuleResult} với điểm, mức, màu, quy tắc kích hoạt và khuyến nghị.
 \end{itemize}
 
-\subsection{Kiến trúc frontend React}
+\subsection*{2. Kiến trúc frontend React}
 
 Frontend tại \texttt{frontend/src/} nhận JSON và phân phối vào ba thành phần chính:
 
@@ -292,6 +252,137 @@ Frontend tại \texttt{frontend/src/} nhận JSON và phân phối vào ba thàn
 \end{itemize}
 \end{sloppypar}
 
-\begin{sloppypar}
-Axios client (\texttt{services/api.js}) được cấu hình proxy \texttt{http://localhost:8000} trong môi trường dev (\texttt{package.json}), nên tất cả các lời gọi \texttt{/api/...} tự động chuyển hướng về backend -- không cần CORS trong môi trường dev.
-\end{sloppypar}
+\section{Hàm mất mát cho phân đoạn nhị phân}
+
+\subsection{Hệ số Dice}
+
+Hệ số Dice đo lường mức độ chồng lấp giữa mặt nạ dự đoán $\hat{Y}$ và nhãn thực $Y$:
+
+\begin{equation}
+    \text{Dice}(\hat{Y}, Y) = \frac{2 \sum_{i} \hat{y}_i y_i}{\sum_{i} \hat{y}_i^2 + \sum_{i} y_i^2 + \epsilon}
+    \label{eq:dice}
+\end{equation}
+
+trong đó $\epsilon$ là hằng số nhỏ để tránh chia cho 0. Hàm mất mát Dice: $\mathcal{L}_{\text{Dice}} = 1 - \text{Dice}$.
+
+\subsection{Binary Cross-Entropy}
+
+Hàm BCE đo lỗi pixel-level:
+
+\begin{equation}
+    \mathcal{L}_{\text{BCE}} = -\frac{1}{N} \sum_{i=1}^{N} \left[ y_i \log \hat{p}_i + (1 - y_i) \log(1 - \hat{p}_i) \right]
+    \label{eq:bce}
+\end{equation}
+
+trong đó $\hat{p}_i = \sigma(\text{logit}_i)$ là xác suất dự đoán pixel $i$ là khối u. Trong thực tế huấn luyện, hàm mất mát kết hợp $\mathcal{L} = \mathcal{L}_{\text{BCE}} + \mathcal{L}_{\text{Dice}}$ thường cho kết quả tốt hơn từng thành phần đơn lẻ.
+
+
+\section{Bộ dữ liệu LGG MRI Segmentation}
+
+\subsection{Mô tả tập dữ liệu}
+
+Bộ dữ liệu LGG MRI Segmentation \cite{Buda2019, Buda2019Journal} do Buda và cộng sự phát triển và công bố công khai trên Kaggle. Dữ liệu được lấy từ The Cancer Genome Atlas (TCGA) và bao gồm:
+
+\begin{itemize}
+    \item \textbf{Tổng số ảnh:} 3.929 ảnh MRI não 2D (lát cắt axial).
+    \item \textbf{Số bệnh nhân:} 110 bệnh nhân được chẩn đoán u thần kinh đệm độ thấp (LGG).
+    \item \textbf{Định dạng:} TIFF ($256 \times 256$ pixel, 3 kênh RGB).
+    \item \textbf{Nhãn:} Mặt nạ phân đoạn nhị phân ($256 \times 256$) do chuyên gia chú thích, giá trị 255 tương ứng vùng khối u.
+    \item \textbf{Chuỗi xung:} Chủ yếu T1-weighted post-contrast.
+    \item \textbf{Đặc điểm phân bố:} Phần lớn ảnh không có khối u hoặc khối u nhỏ, tạo ra sự mất cân bằng lớp đáng kể (khoảng 80\% ảnh có tỷ lệ pixel khối u $< 5\%$).
+\end{itemize}
+
+\subsection{Chia tập dữ liệu}
+
+Dữ liệu được chia theo bệnh nhân (patient-level split) để tránh rò rỉ thông tin giữa tập train và test:
+
+\begin{table}[h!]
+    \centering
+    \caption{Phân chia tập dữ liệu LGG MRI Segmentation.}
+    \label{tab:dataset_split}
+    \begin{tabular}{l r r r}
+        \toprule
+        \tabhead{Tập dữ liệu} & \tabhead{Số bệnh nhân} & \tabhead{Số ảnh} & \tabhead{Tỷ lệ} \\
+        \midrule
+        Huấn luyện (Train)    & 88  &  3.143  & 80\% \\
+        Kiểm thử (Test)       & 22  &  786    & 20\% \\
+        \midrule
+        Tổng cộng             & 110 & 3.929            & 100\% \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\section{Quy trình huấn luyện}
+
+\subsection{Tăng cường dữ liệu}
+
+Để giảm overfitting và cải thiện khả năng tổng quát hóa \cite{Shorten2019}, các phép biến đổi tăng cường dữ liệu ngẫu nhiên được áp dụng trong quá trình huấn luyện:
+
+\begin{itemize}
+    \item Lật ngang (horizontal flip) với xác suất 50\%.
+    \item Lật dọc (vertical flip) với xác suất 50\%.
+    \item Xoay ngẫu nhiên trong khoảng $\pm 20°$.
+    \item Biến đổi độ sáng/tương phản ngẫu nhiên ($\pm 20\%$).
+    \item Dịch chuyển ngẫu nhiên theo chiều ngang/dọc (shift range $10\%$).
+\end{itemize}
+
+Các phép biến đổi được áp dụng đồng thời cho cả ảnh và nhãn để đảm bảo tính nhất quán.
+
+\subsection{Cấu hình huấn luyện}
+
+\begin{table}[h!]
+    \centering
+    \caption{Siêu tham số huấn luyện mô hình.}
+    \label{tab:hyperparams}
+    \begin{tabular}{l l}
+        \toprule
+        \tabhead{Siêu tham số} & \tabhead{Giá trị} \\
+        \midrule
+        Optimizer              & Adam \\
+        Learning rate ban đầu  & $1 \times 10^{-4}$ \\
+        Weight decay           & $1 \times 10^{-5}$ \\
+        Batch size             & 16 \\
+        Số epoch tối đa        & 50 \\
+        Hàm mất mát            & BCE + Dice Loss \\
+        Early stopping         & Patience = 10 epoch \\
+        LR scheduler           & ReduceLROnPlateau (factor=0.5) \\
+        Kích thước ảnh đầu vào & $256 \times 256$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Môi trường thực nghiệm}
+
+Huấn luyện được thực hiện trên Google Colab Pro với GPU NVIDIA Tesla T4 (16 GB VRAM). Framework sử dụng PyTorch \cite{Paszke2019} v2.0+ và thư viện SMP \cite{Yakubovskiy2019} v0.3+.
+
+\section{Các độ đo đánh giá}
+
+\subsection{Hệ số Dice (DSC)}
+
+Hệ số Dice (Dice Similarity Coefficient) là độ đo chính cho bài toán phân đoạn y tế:
+
+\begin{equation}
+    \text{DSC} = \frac{2 \cdot |\hat{Y} \cap Y|}{|\hat{Y}| + |Y|}
+    \label{eq:dsc}
+\end{equation}
+
+DSC = 1.0 là hoàn hảo; DSC = 0.0 là không chồng lấp. DSC đặc biệt phù hợp với dữ liệu mất cân bằng lớp vì tập trung vào vùng dương tính.
+
+\subsection{Intersection over Union (IoU)}
+
+IoU (Jaccard Index) đo tỷ lệ vùng chồng lấp trên vùng hợp:
+
+\begin{equation}
+    \text{IoU} = \frac{|\hat{Y} \cap Y|}{|\hat{Y} \cup Y|} = \frac{\text{TP}}{\text{TP} + \text{FP} + \text{FN}}
+    \label{eq:iou}
+\end{equation}
+
+\subsection{Precision và Recall}
+
+\begin{equation}
+    P = \frac{\text{TP}}{\text{TP} + \text{FP}}, \qquad
+    R = \frac{\text{TP}}{\text{TP} + \text{FN}}
+    \label{eq:pr}
+\end{equation}
+
+Trong bài toán phát hiện u não, Recall (độ phủ) quan trọng hơn Precision: bỏ sót khối u (FN cao) là lỗi nghiêm trọng hơn báo dương giả (FP cao).
