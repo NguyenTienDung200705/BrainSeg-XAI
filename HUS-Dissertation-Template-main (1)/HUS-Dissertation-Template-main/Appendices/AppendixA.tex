@@ -1,0 +1,1014 @@
+% Phụ lục A: Mã nguồn hệ thống BrainSeg-XAI
+
+\chapter{Mã nguồn hệ thống BrainSeg-XAI}
+
+\label{AppendixA}
+
+%----------------------------------------------------------------------------------------
+
+Phụ lục này trình bày toàn bộ mã nguồn của các module cốt lõi trong hệ thống BrainSeg-XAI.
+Mã nguồn được tổ chức theo cấu trúc thư mục thực tế của dự án.
+
+%----------------------------------------------------------------------------------------
+\section{Backend -- Ứng dụng FastAPI chính (\texttt{app/main.py})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={FastAPI -- Khoi tao app va CORS middleware (app/main.py)}]
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.api.predict import router as predict_router
+
+app = FastAPI(
+    title="Brain Tumor AI API",
+    description="He thong AI phan tich va danh gia khoi u nao tu anh MRI",
+    version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(predict_router, prefix="/api/v1")
+
+@app.get("/")
+async def root():
+    return {
+        "name": "Brain Tumor AI",
+        "version": "1.0.0",
+        "docs": "/docs",
+    }
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Backend -- Endpoint dự đoán (\texttt{app/api/predict.py})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={REST API endpoint nhan anh MRI va tra ket qua phan tich (app/api/predict.py)}]
+from fastapi import APIRouter, UploadFile, File, HTTPException
+from app.services.inference import predict
+from app.utils.image_utils import load_image_from_bytes
+
+router = APIRouter()
+
+@router.post("/predict")
+async def predict_endpoint(file: UploadFile = File(...)):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=400,
+            detail="Chi chap nhan file anh.")
+
+    raw = await file.read()
+    if len(raw) > 20 * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail="File anh qua lon (toi da 20MB).")
+
+    try:
+        img_rgb = load_image_from_bytes(raw)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    try:
+        result = predict(img_rgb)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Loi xu ly mo hinh: {str(e)}")
+
+    return result
+
+@router.get("/health")
+async def health():
+    return {"status": "ok",
+            "message": "Brain Tumor AI API dang hoat dong"}
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Backend -- Tiện ích xử lý ảnh (\texttt{app/utils/image\_utils.py})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={Tien xu ly anh MRI: doc, resize 256x256, chuan hoa ImageNet (app/utils/image\_utils.py)}]
+import cv2
+import numpy as np
+from PIL import Image
+import io
+import base64
+
+TARGET_SIZE = (256, 256)
+MEAN = [0.485, 0.456, 0.406]   # ImageNet mean
+STD  = [0.229, 0.224, 0.225]   # ImageNet std
+
+def load_image_from_bytes(raw: bytes) -> np.ndarray:
+    arr = np.frombuffer(raw, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError(
+            "Khong the doc anh. Vui long thu lai voi file anh hop le.")
+    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+def preprocess(img_rgb: np.ndarray):
+    """Tra ve (tensor NCHW float32, original_rgb resized 256x256)"""
+    import torch
+    resized = cv2.resize(img_rgb, TARGET_SIZE,
+                         interpolation=cv2.INTER_LINEAR)
+    norm = resized.astype(np.float32) / 255.0
+    for c in range(3):
+        norm[:, :, c] = (norm[:, :, c] - MEAN[c]) / STD[c]
+    tensor = torch.from_numpy(
+        norm.transpose(2, 0, 1)).unsqueeze(0)  # 1x3xHxW
+    return tensor, resized
+
+def mask_to_binary(logits_tensor) -> np.ndarray:
+    import torch
+    prob = torch.sigmoid(logits_tensor).squeeze().cpu().numpy()
+    return (prob > 0.5).astype(np.uint8)
+
+def ndarray_to_b64(arr: np.ndarray, ext: str = "png") -> str:
+    pil = Image.fromarray(arr.astype(np.uint8))
+    buf = io.BytesIO()
+    pil.save(buf, format=ext.upper())
+    return base64.b64encode(buf.getvalue()).decode()
+
+def apply_colormap_heatmap(gray: np.ndarray) -> np.ndarray:
+    """gray: HxW float [0,1] -> RGB uint8 (JET colormap)"""
+    gray_u8 = (gray * 255).clip(0, 255).astype(np.uint8)
+    colored = cv2.applyColorMap(gray_u8, cv2.COLORMAP_JET)
+    return cv2.cvtColor(colored, cv2.COLOR_BGR2RGB)
+
+def overlay_mask(img_rgb: np.ndarray, mask: np.ndarray,
+                 alpha: float = 0.45) -> np.ndarray:
+    overlay = img_rgb.copy()
+    overlay[mask == 1] = [255, 80, 80]
+    return cv2.addWeighted(img_rgb, 1 - alpha, overlay, alpha, 0)
+
+def overlay_heatmap(img_rgb: np.ndarray, heatmap_rgb: np.ndarray,
+                    alpha: float = 0.5) -> np.ndarray:
+    return cv2.addWeighted(img_rgb, 1 - alpha, heatmap_rgb, alpha, 0)
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Backend -- Định nghĩa mô hình (\texttt{app/models/unet.py})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={Vanilla UNet va SMP wrapper -- ho tro U-Net va U-Net++ (app/models/unet.py)}]
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+# --- 1. Vanilla U-Net (backward-compat voi weight cu) ---------------
+class DoubleConv(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_ch), nn.ReLU(inplace=True),
+            nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_ch), nn.ReLU(inplace=True),
+        )
+    def forward(self, x): return self.conv(x)
+
+class Down(nn.Module):
+    def __init__(self, ic, oc):
+        super().__init__()
+        self.pool_conv = nn.Sequential(
+            nn.MaxPool2d(2), DoubleConv(ic, oc))
+    def forward(self, x): return self.pool_conv(x)
+
+class Up(nn.Module):
+    def __init__(self, ic, oc):
+        super().__init__()
+        self.up   = nn.ConvTranspose2d(ic, ic // 2, 2, stride=2)
+        self.conv = DoubleConv(ic, oc)
+    def forward(self, x1, x2):
+        x1 = self.up(x1)
+        dy = x2.size(2) - x1.size(2)
+        dx = x2.size(3) - x1.size(3)
+        x1 = F.pad(x1, [dx//2, dx-dx//2, dy//2, dy-dy//2])
+        return self.conv(torch.cat([x2, x1], 1))
+
+class UNet(nn.Module):
+    def __init__(self, n_channels=3, n_classes=1,
+                 features=[64, 128, 256, 512]):
+        super().__init__()
+        f = features
+        self.inc   = DoubleConv(n_channels, f[0])
+        self.down1 = Down(f[0], f[1])
+        self.down2 = Down(f[1], f[2])
+        self.down3 = Down(f[2], f[3])
+        self.down4 = Down(f[3], f[3]*2)
+        self.up1   = Up(f[3]*2, f[3])
+        self.up2   = Up(f[3],   f[2])
+        self.up3   = Up(f[2],   f[1])
+        self.up4   = Up(f[1],   f[0])
+        self.outc  = nn.Conv2d(f[0], n_classes, 1)
+
+    def forward(self, x):
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x  = self.up1(x5, x4)
+        x  = self.up2(x,  x3)
+        x  = self.up3(x,  x2)
+        x  = self.up4(x,  x1)
+        return self.outc(x)
+
+# --- 2. SMP wrapper --------------------------------------------------
+def build_smp_model(arch="unetplusplus",
+                    encoder="efficientnet-b4",
+                    encoder_weights="imagenet",
+                    n_classes=1):
+    """
+    arch    : 'unetplusplus' | 'unet' | 'deeplabv3plus' | 'fpn' | 'manet'
+    encoder : 'efficientnet-b4' | 'resnet50' | 'resnet34' | ...
+    """
+    try:
+        import segmentation_models_pytorch as smp
+    except ImportError:
+        raise ImportError(
+            "segmentation-models-pytorch chua duoc cai.\n"
+            "Chay: pip install segmentation-models-pytorch timm")
+    return smp.create_model(
+        arch,
+        encoder_name=encoder,
+        encoder_weights=encoder_weights,
+        in_channels=3,
+        classes=n_classes,
+        activation=None,
+    )
+
+# --- 3. Auto-loader --------------------------------------------------
+def get_model(arch="unetplusplus", encoder="efficientnet-b4",
+              n_classes=1, pretrained=True):
+    try:
+        model = build_smp_model(
+            arch=arch, encoder=encoder,
+            encoder_weights="imagenet" if pretrained else None,
+            n_classes=n_classes)
+        print(f"[Model] Dung SMP -- arch={arch}, encoder={encoder}")
+        return model, "smp"
+    except Exception as e:
+        print(f"[Model] SMP khong kha dung ({e}), fallback UNet.")
+        return UNet(n_channels=3, n_classes=n_classes), "vanilla"
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Backend -- Dịch vụ suy luận (\texttt{app/services/inference.py})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={Lazy model loading, auto-detect checkpoint va dieu phoi prediction pipeline (app/services/inference.py)}]
+import torch
+import numpy as np
+from pathlib import Path
+
+from app.models.unet import get_model, UNet
+from app.utils.image_utils import (
+    preprocess, mask_to_binary,
+    apply_colormap_heatmap, overlay_mask, overlay_heatmap,
+    ndarray_to_b64,
+)
+from app.xai.gradcam import GradCAM, get_target_layer
+from app.services.feature_extraction import extract_features
+from app.rules.medical_rules import evaluate_risk
+
+WEIGHTS_PATH = (Path(__file__).parent.parent.parent
+                / "weights" / "unet_best.pth")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+_model      = None
+_model_type = "vanilla"
+_gradcam    = None
+
+def convert_numpy(obj):
+    if isinstance(obj, (np.bool_, bool)):    return bool(obj)
+    if isinstance(obj, np.integer):          return int(obj)
+    if isinstance(obj, np.floating):         return float(obj)
+    if isinstance(obj, np.ndarray):          return obj.tolist()
+    if isinstance(obj, dict):
+        return {k: convert_numpy(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [convert_numpy(v) for v in obj]
+    return obj
+
+def _load_model():
+    global _model, _model_type, _gradcam
+    if _model is not None:
+        return
+
+    if not WEIGHTS_PATH.exists():
+        print("[WARN] Weights not found -- demo mode (random weights).")
+        model, mtype = get_model(pretrained=False)
+        model.to(DEVICE).eval()
+        _model      = model
+        _model_type = mtype
+        _gradcam    = GradCAM(model, get_target_layer(model, mtype))
+        return
+
+    ckpt = torch.load(WEIGHTS_PATH, map_location=DEVICE)
+
+    arch    = (ckpt.get("arch",    "unetplusplus")
+               if isinstance(ckpt, dict) else "unetplusplus")
+    encoder = (ckpt.get("encoder", "efficientnet-b4")
+               if isinstance(ckpt, dict) else "efficientnet-b4")
+
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        sd = ckpt["model_state_dict"]
+    elif isinstance(ckpt, dict) and "state_dict" in ckpt:
+        sd = ckpt["state_dict"]
+    elif isinstance(ckpt, dict) and any(
+        k.startswith("encoder") or k.startswith("decoder")
+        for k in ckpt.keys()
+    ):
+        sd = ckpt
+        arch, encoder = "unetplusplus", "efficientnet-b4"
+    else:
+        sd = ckpt
+
+    keys = list(sd.keys()) if isinstance(sd, dict) else []
+    is_vanilla = any(
+        k.startswith("inc.") or k.startswith("down")
+        or k.startswith("up")
+        for k in keys)
+
+    if is_vanilla:
+        model, mtype = UNet(n_channels=3, n_classes=1), "vanilla"
+        print(f"[Model] Load vanilla UNet tu {WEIGHTS_PATH}")
+    else:
+        try:
+            model, mtype = get_model(
+                arch=arch, encoder=encoder, pretrained=False)
+            print(f"[Model] Load SMP {arch}/{encoder}")
+        except Exception as e:
+            print(f"[Model] SMP fail ({e}), thu vanilla UNet.")
+            model, mtype = UNet(n_channels=3, n_classes=1), "vanilla"
+
+    model.load_state_dict(sd, strict=False)
+    model.to(DEVICE).eval()
+    _model      = model
+    _model_type = mtype
+    _gradcam    = GradCAM(model, get_target_layer(model, mtype))
+    print(f"[Model] Ready -- type={mtype}, device={DEVICE}")
+
+def predict(img_rgb: np.ndarray) -> dict:
+    _load_model()
+    tensor, resized = preprocess(img_rgb)
+    tensor = tensor.to(DEVICE)
+
+    with torch.no_grad():
+        logits = _model(tensor)
+
+    mask = mask_to_binary(logits)
+
+    try:
+        cam = _gradcam.generate(tensor.clone())
+    except Exception as e:
+        print(f"[GradCAM] Error: {e}")
+        cam = np.zeros(resized.shape[:2], dtype=np.float32)
+
+    heatmap_rgb  = apply_colormap_heatmap(cam)
+    mask_overlay = overlay_mask(resized, mask)
+    cam_overlay  = overlay_heatmap(resized, heatmap_rgb)
+
+    mask_vis = np.zeros((*mask.shape, 3), dtype=np.uint8)
+    mask_vis[mask == 1] = [0, 255, 136]
+
+    features = extract_features(mask, mask.shape)
+    risk     = evaluate_risk(features)
+
+    return convert_numpy({
+        "original_b64":    ndarray_to_b64(resized),
+        "mask_b64":        ndarray_to_b64(mask_vis),
+        "overlay_b64":     ndarray_to_b64(mask_overlay),
+        "heatmap_b64":     ndarray_to_b64(heatmap_rgb),
+        "cam_overlay_b64": ndarray_to_b64(cam_overlay),
+        "features": features,
+        "risk": {
+            "risk_level":      risk.risk_level,
+            "risk_score":      risk.risk_score,
+            "severity":        risk.severity,
+            "risk_color":      risk.risk_color,
+            "fired_rules":     risk.fired_rules,
+            "recommendations": risk.recommendations,
+            "explanation":     risk.explanation,
+        },
+    })
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Backend -- Module Grad-CAM (\texttt{app/xai/gradcam.py})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={Trien khai Grad-CAM voi PyTorch forward/backward hooks (app/xai/gradcam.py)}]
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+class GradCAM:
+    def __init__(self, model: torch.nn.Module,
+                 target_layer: torch.nn.Module):
+        self.model        = model
+        self.target_layer = target_layer
+        self._features    = None
+        self._grads       = None
+        self._hooks       = []
+        self._register()
+
+    def _register(self):
+        self._hooks.append(
+            self.target_layer.register_forward_hook(
+                self._save_features))
+        self._hooks.append(
+            self.target_layer.register_full_backward_hook(
+                self._save_grads))
+
+    def _save_features(self, m, inp, out):
+        self._features = out.detach()
+
+    def _save_grads(self, m, gi, go):
+        self._grads = go[0].detach()
+
+    def remove_hooks(self):
+        for h in self._hooks:
+            h.remove()
+
+    def generate(self, input_tensor: torch.Tensor) -> np.ndarray:
+        self.model.eval()
+        input_tensor = input_tensor.detach().requires_grad_(True)
+
+        output = self.model(input_tensor)
+        score  = torch.sigmoid(output).sum()   # tong sigmoid cho phan doan nhi phan
+        self.model.zero_grad()
+        score.backward()
+
+        if self._grads is None or self._features is None:
+            return np.zeros(input_tensor.shape[-2:], dtype=np.float32)
+
+        # Global Average Pooling tren gradient
+        weights = self._grads.mean(dim=(2, 3), keepdim=True)
+        cam = F.relu(
+            (weights * self._features).sum(dim=1, keepdim=True))
+
+        cam = F.interpolate(
+            cam,
+            size=input_tensor.shape[-2:],
+            mode="bilinear",
+            align_corners=False)
+        cam = cam.squeeze().cpu().numpy()
+
+        lo, hi = cam.min(), cam.max()
+        if hi - lo > 1e-8:
+            cam = (cam - lo) / (hi - lo)  # chuan hoa min-max
+        else:
+            cam = np.zeros_like(cam)
+        return cam.astype(np.float32)
+
+def get_target_layer(model, model_type: str = "vanilla"):
+    """Chon layer de dang ky hook Grad-CAM theo loai model."""
+    if model_type == "smp":
+        try:
+            return model.segmentation_head[0]
+        except Exception:
+            pass
+        try:
+            blocks = list(model.decoder.blocks)
+            return blocks[-1].conv2[0]
+        except Exception:
+            pass
+        convs = [m for m in model.modules()
+                 if isinstance(m, torch.nn.Conv2d)]
+        return convs[-2] if len(convs) >= 2 else convs[-1]
+    else:
+        # Vanilla UNet: layer truoc lop dau ra cuoi cung
+        return model.up4.conv.conv[-3]
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Backend -- Trích xuất đặc trưng (\texttt{app/services/feature\_extraction.py})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={Tinh toan dac trung hinh thai hoc tu mat na nhi phan (app/services/feature\_extraction.py)}]
+import numpy as np
+from scipy import ndimage
+from skimage import measure
+
+def extract_features(mask: np.ndarray, img_shape: tuple) -> dict:
+    """
+    mask      : binary HxW uint8
+    img_shape : (H, W)
+    Returns   : dict cac dac trung y khoa
+    """
+    H, W = img_shape
+    total_pixels = H * W
+
+    labeled, num_tumors = ndimage.label(mask)
+    tumor_pixels    = int(mask.sum())
+    occupancy_ratio = round(tumor_pixels / total_pixels * 100, 2)
+
+    if tumor_pixels == 0:
+        return {
+            "tumor_detected":    False,
+            "tumor_area_px":     0,
+            "tumor_area_cm2":    0.0,
+            "occupancy_ratio":   0.0,
+            "num_regions":       0,
+            "shape_irregularity": 0.0,
+            "compactness":       0.0,
+            "boundary_complexity": 0.0,
+            "midline_shift":     False,
+            "location":          "Khong phat hien khoi u",
+            "centroid_x":        None,
+            "centroid_y":        None,
+        }
+
+    # Chuyen doi px -> cm2 (MRI slice ~ 24cm x 24cm tai 256x256)
+    px_to_cm = (24.0 / H) ** 2
+    tumor_area_cm2 = round(tumor_pixels * px_to_cm, 2)
+
+    # Dac trung hinh dang qua regionprops cua vung lon nhat
+    props_list = measure.regionprops(labeled)
+    props = max(props_list, key=lambda p: p.area)
+
+    perimeter = props.perimeter if props.perimeter > 0 else 1
+    area_p    = props.area
+    compactness = round((4 * np.pi * area_p) / (perimeter ** 2), 4)
+    shape_irregularity  = round(1.0 - compactness, 4)
+    boundary_complexity = round(
+        perimeter / (np.sqrt(area_p) + 1e-6), 4)
+
+    cy, cx    = props.centroid
+    cx_norm   = cx / W
+    cy_norm   = cy / H
+
+    h_loc = ("ben trai" if cx_norm < 0.45
+             else "ben phai" if cx_norm > 0.55
+             else "trung tam")
+    v_loc = ("thuy tran" if cy_norm < 0.33
+             else "thuy dinh/thai duong" if cy_norm < 0.66
+             else "thuy cham/tieu nao")
+    location = f"{v_loc}, {h_loc}"
+
+    midline_shift = abs(cx_norm - 0.5) > 0.10
+
+    return {
+        "tumor_detected":    True,
+        "tumor_area_px":     tumor_pixels,
+        "tumor_area_cm2":    tumor_area_cm2,
+        "occupancy_ratio":   occupancy_ratio,
+        "num_regions":       num_tumors,
+        "shape_irregularity": shape_irregularity,
+        "compactness":       compactness,
+        "boundary_complexity": boundary_complexity,
+        "midline_shift":     midline_shift,
+        "location":          location,
+        "centroid_x":        round(float(cx), 1),
+        "centroid_y":        round(float(cy), 1),
+    }
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Backend -- Bộ máy luật y khoa (\texttt{app/rules/medical\_rules.py})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={Rule-based risk engine -- 6 quy tac, additive scoring, 4 muc rui ro (app/rules/medical\_rules.py)}]
+from dataclasses import dataclass, field
+from typing import List
+
+@dataclass
+class RuleResult:
+    risk_level:      str   # "Thap" | "Trung binh" | "Cao" | "Rat cao"
+    risk_score:      int   # 0-100
+    severity:        str   # "Binh thuong" | "Nhe" | ... | "Nguy kich"
+    risk_color:      str   # hex color cho UI
+    fired_rules:     List[str] = field(default_factory=list)
+    recommendations: List[str] = field(default_factory=list)
+    explanation:     str = ""
+
+def evaluate_risk(features: dict) -> RuleResult:
+    if not features.get("tumor_detected", False):
+        return RuleResult(
+            risk_level="Thap", risk_score=0,
+            severity="Binh thuong", risk_color="#00ff88",
+            fired_rules=["Khong phat hien khoi u trong anh MRI"],
+            recommendations=["Tiep tuc theo doi dinh ky",
+                             "Chup MRI kiem tra sau 12 thang"],
+            explanation="Khong phat hien bat ky vung bat thuong nao.")
+
+    score = 0
+    fired, recs = [], []
+
+    occ   = features["occupancy_ratio"]
+    irr   = features["shape_irregularity"]
+    bnd   = features["boundary_complexity"]
+    mid   = features["midline_shift"]
+    n_reg = features["num_regions"]
+    area  = features["tumor_area_cm2"]
+
+    # Rule 1: Occupancy ratio
+    if occ > 20:
+        score += 30
+        fired.append(f"Ty le chiem vung nao rat cao ({occ}% > 20%)")
+        recs.append("Can can thiep phau thuat khan cap")
+    elif occ > 10:
+        score += 20
+        fired.append(f"Ty le chiem vung nao cao ({occ}% > 10%)")
+        recs.append("Hoi chan chuyen khoa than kinh ngay")
+    elif occ > 5:
+        score += 10
+        fired.append(f"Ty le chiem vung nao o muc trung binh ({occ}%)")
+        recs.append("Theo doi sat va chup MRI dinh ky 3 thang/lan")
+    else:
+        fired.append(f"Ty le chiem vung nao thap ({occ}%)")
+
+    # Rule 2: Shape irregularity
+    if irr > 0.7:
+        score += 25
+        fired.append(
+            f"Hinh dang khoi u rat bat doi xung (irr={irr:.2f})")
+        recs.append("Sinh thiet de xac dinh tinh ac tinh")
+    elif irr > 0.5:
+        score += 15
+        fired.append(
+            f"Hinh dang khoi u bat doi xung vua (irr={irr:.2f})")
+    else:
+        fired.append(
+            f"Hinh dang khoi u tuong doi deu dan (irr={irr:.2f})")
+
+    # Rule 3: Boundary complexity
+    if bnd > 15:
+        score += 20
+        fired.append(
+            f"Duong bien khoi u rat phuc tap (complexity={bnd:.1f})")
+        recs.append("Chi dinh PET-CT de danh gia do xam lan")
+    elif bnd > 10:
+        score += 10
+        fired.append(
+            f"Duong bien khoi u phuc tap vua (complexity={bnd:.1f})")
+    else:
+        fired.append(
+            f"Duong bien khoi u tuong doi don gian (complexity={bnd:.1f})")
+
+    # Rule 4: Midline shift
+    if mid:
+        score += 20
+        fired.append(
+            "Co dau hieu dich chuyen duong giua nao (Midline Shift)")
+        recs.append(
+            "Theo doi ap luc noi so, xem xet can thiep giai ap")
+
+    # Rule 5: Multiple regions
+    if n_reg > 3:
+        score += 15
+        fired.append(
+            f"Phat hien nhieu vung khoi u ({n_reg} vung) -- nghi di can")
+        recs.append("Chup MRI toan than, tim kiem o di can nguyen phat")
+    elif n_reg > 1:
+        score += 8
+        fired.append(f"Phat hien {n_reg} vung khoi u rieng biet")
+
+    # Rule 6: Absolute size
+    if area > 10:
+        score += 15
+        fired.append(f"Dien tich khoi u rat lon ({area} cm2)")
+    elif area > 4:
+        score += 8
+        fired.append(f"Dien tich khoi u trung binh ({area} cm2)")
+    else:
+        fired.append(f"Dien tich khoi u nho ({area} cm2)")
+
+    score = min(score, 100)
+
+    if score >= 70:
+        risk_level, severity, risk_color = (
+            "Rat cao", "Nguy kich", "#ff2d55")
+        recs.insert(0,
+            "KHAN CAP: Can nhap vien va can thiep ngay lap tuc")
+    elif score >= 50:
+        risk_level, severity, risk_color = (
+            "Cao", "Nghiem trong", "#ff6b35")
+        recs.insert(0,
+            "Can dieu tri chuyen khoa trong vong 48 gio")
+    elif score >= 30:
+        risk_level, severity, risk_color = (
+            "Trung binh", "Trung binh", "#ffd60a")
+        if not recs:
+            recs.append("Theo doi va dieu tri theo phac do cua bac si")
+    else:
+        risk_level, severity, risk_color = (
+            "Thap", "Nhe", "#00c896")
+        if not recs:
+            recs.append("Theo doi dinh ky 6 thang/lan")
+
+    explanation = (
+        f"He thong phan tich {len(fired)} dac trung y khoa va kich hoat "
+        f"{sum(1 for r in fired if any(k in r for k in ['cao', 'phuc tap', 'bat doi', 'dich chuyen', 'di can', 'lon']))} "
+        f"co nguy co. Diem nguy co tong hop: {score}/100. "
+        f"Phan loai: {severity}."
+    )
+
+    return RuleResult(
+        risk_level=risk_level, risk_score=score,
+        severity=severity, risk_color=risk_color,
+        fired_rules=fired,
+        recommendations=list(dict.fromkeys(recs)),
+        explanation=explanation,
+    )
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Frontend -- Thành phần xem ảnh (\texttt{src/components/ImageViewer.jsx})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={React component ImageViewer -- hien thi 5 che do xem anh (ImageViewer.jsx)}]
+import { useState } from 'react';
+
+const VIEWS = [
+  { key: 'original_b64', label: 'Anh Goc',      tag: 'MRI RAW'       },
+  { key: 'overlay_b64',  label: 'Mask Overlay',  tag: 'SEGMENTATION'  },
+  { key: 'mask_b64',     label: 'Segmentation',  tag: 'BINARY MASK'   },
+  { key: 'cam_overlay_b64', label: 'XAI Overlay', tag: 'GRAD-CAM'    },
+  { key: 'heatmap_b64',  label: 'Heatmap',       tag: 'ATTENTION MAP' },
+];
+
+export default function ImageViewer({ result }) {
+  const [active, setActive] = useState(0);
+  const current = VIEWS[active];
+  const src = `data:image/png;base64,${result[current.key]}`;
+
+  return (
+    <div className="card animate-in">
+      <div className="card-header">
+        <span className="card-title">Truc quan hoa ket qua</span>
+        <span className="card-tag">{current.tag}</span>
+      </div>
+
+      {/* Tab selector */}
+      <div className="image-tabs">
+        {VIEWS.map((v, i) => (
+          <button
+            key={v.key}
+            className={`img-tab${active === i ? ' active' : ''}`}
+            onClick={() => setActive(i)}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Anh chinh + thumbnails */}
+      <div className="image-display">
+        <div className="img-main-wrapper">
+          <img className="img-main" src={src} alt={current.label} />
+          <div className="img-label">{current.label}</div>
+        </div>
+        <div className="img-thumbs">
+          {VIEWS.map((v, i) => (
+            <div key={v.key}>
+              <div
+                className={`img-thumb${active === i ? ' active' : ''}`}
+                onClick={() => setActive(i)}
+              >
+                <img
+                  src={`data:image/png;base64,${result[v.key]}`}
+                  alt={v.label}
+                />
+              </div>
+              <div className="thumb-label">
+                {v.label.split(' ')[0]}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Frontend -- Bảng đánh giá rủi ro (\texttt{src/components/RiskPanel.jsx})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={React component RiskPanel -- dong ho rui ro SVG va ket qua phan tich (RiskPanel.jsx)}]
+import { useEffect, useState } from 'react';
+
+function RiskGauge({ score, color }) {
+  const [displayed, setDisplayed] = useState(0);
+  const R = 54;
+  const CIRC = 2 * Math.PI * R;
+
+  useEffect(() => {
+    let start = null;
+    const duration = 1200;
+    const animate = (ts) => {
+      if (!start) start = ts;
+      const prog = Math.min((ts - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - prog, 3); // cubic ease-out
+      setDisplayed(Math.round(score * ease));
+      if (prog < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, [score]);
+
+  const offset = CIRC * (1 - displayed / 100);
+  return (
+    <div className="risk-gauge">
+      <svg width="140" height="140" viewBox="0 0 140 140">
+        <circle cx="70" cy="70" r={R} fill="none"
+          stroke="rgba(0,200,255,0.07)" strokeWidth="10" />
+        <circle cx="70" cy="70" r={R} fill="none"
+          stroke={color} strokeWidth="10"
+          strokeLinecap="round"
+          strokeDasharray={CIRC}
+          strokeDashoffset={offset}
+          style={{
+            transform: 'rotate(-90deg)',
+            transformOrigin: '70px 70px',
+            filter: `drop-shadow(0 0 8px ${color})`,
+          }}
+        />
+      </svg>
+      <div className="risk-number">
+        <span style={{ color }}>{displayed}</span>
+        <small>/100</small>
+      </div>
+    </div>
+  );
+}
+
+export default function RiskPanel({ risk, features }) {
+  const color = risk.risk_color;
+  const levelEmoji = {
+    'Rat cao': 'Nguy kich', 'Cao': 'Nghiem trong',
+    'Trung binh': 'Trung binh', 'Thap': 'Nhe',
+  }[risk.risk_level] || '';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Diem nguy co */}
+      <div className="card risk-card animate-in">
+        <div className="card-header">
+          <span className="card-title">Danh gia nguy co lam sang</span>
+        </div>
+        <div className="risk-score-display">
+          <RiskGauge score={risk.risk_score} color={color} />
+          <div className="risk-level-badge"
+            style={{ color, border: `1px solid ${color}40` }}>
+            Nguy co {risk.risk_level}
+          </div>
+          <div className="risk-severity">
+            Muc do: <span style={{ color }}>{risk.severity}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Luat da kich hoat */}
+      <div className="card animate-in">
+        <div className="card-header">
+          <span className="card-title">Luat y khoa kich hoat</span>
+          <span className="card-tag">{risk.fired_rules.length} luat</span>
+        </div>
+        <div className="rules-list">
+          {risk.fired_rules.map((rule, i) => (
+            <div key={i} className="rule-item">
+              <span className="rule-icon">
+                {rule.includes('cao') ? 'WARN' : 'OK'}
+              </span>
+              <span>{rule}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Khuyen nghi lam sang */}
+      <div className="card animate-in">
+        <div className="card-header">
+          <span className="card-title">Khuyen nghi lam sang</span>
+        </div>
+        <div className="rec-list">
+          {risk.recommendations.map((rec, i) => (
+            <div key={i} className="rec-item">
+              <span>-- {rec}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  );
+}
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Frontend -- Dịch vụ API client (\texttt{src/services/api.js})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=codePython, caption={Axios client goi REST API backend (src/services/api.js)}]
+import axios from 'axios';
+
+const API_BASE = process.env.REACT_APP_API_URL
+                 || 'http://localhost:8000';
+
+const api = axios.create({
+  baseURL: `${API_BASE}/api/v1`,
+  timeout: 120000,   // 2 phut timeout cho inference tren CPU
+});
+
+export const predictTumor = async (file, onUploadProgress) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await api.post('/predict', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress,
+  });
+
+  return response.data;
+};
+
+export const checkHealth = async () => {
+  const response = await api.get('/health');
+  return response.data;
+};
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Docker Compose -- Cấu hình triển khai (\texttt{docker-compose.yml})}
+%----------------------------------------------------------------------------------------
+
+\begin{lstlisting}[style=plaintext, caption={Cau hinh Docker Compose cho trien khai production (docker-compose.yml)}]
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/weights:/app/weights
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=http://backend:8000
+    restart: unless-stopped
+\end{lstlisting}
+
+%----------------------------------------------------------------------------------------
+\section{Đoạn trích minh họa -- Nhận dạng và lưu checkpoint}
+%----------------------------------------------------------------------------------------
+
+Mục này trích xuất hai đoạn mã ngắn minh họa cơ chế nhận dạng loại checkpoint và định dạng lưu checkpoint chuẩn được đề cập trong Chương~\ref{Chapter3}.
+
+\subsection*{A.13.1 Nhận dạng loại checkpoint theo tên khóa state\_dict}
+
+\begin{lstlisting}[style=codePython, caption={Nhan dang loai checkpoint theo ten khoa state\_dict (app/services/inference.py)}]
+# doc state_dict tu file .pth
+sd = checkpoint if isinstance(checkpoint, dict) \
+     and "model_state_dict" not in checkpoint \
+     else checkpoint.get("model_state_dict", checkpoint)
+
+keys = list(sd.keys())
+is_vanilla = any(
+    k.startswith("inc.") or k.startswith("down") or k.startswith("up")
+    for k in keys
+)
+
+if is_vanilla:
+    model = UNet(n_channels=3, n_classes=1)
+else:
+    arch    = checkpoint.get("arch",    "unetplusplus")
+    encoder = checkpoint.get("encoder", "efficientnet-b4")
+    model   = build_smp_model(arch, encoder)
+
+model.load_state_dict(sd)
+model.eval()
+\end{lstlisting}
+
+\subsection*{A.13.2 Lưu checkpoint kèm metadata kiến trúc}
+
+\begin{lstlisting}[style=codePython, caption={Luu checkpoint kem metadata kien truc (dung khi ket thuc huan luyen)}]
+# Luu sau khi huan luyen de he thong tu dong nhan dang khi tai lai
+torch.save(
+    {
+        "arch":             "unetplusplus",
+        "encoder":          "efficientnet-b4",
+        "model_state_dict": model.state_dict(),
+        "epoch":            best_epoch,
+        "val_dice":         best_dice,
+    },
+    "backend/weights/unet_best.pth"
+)
+\end{lstlisting}

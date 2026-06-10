@@ -1,0 +1,74 @@
+% Phụ lục B
+
+\chapter{Liệt kê source code} % Tên của phụ lục
+
+\label{AppendixB} % Để trích dẫn chương này ở chỗ nào đó trong bài, hãy sử dụng lệnh \ref{AppendixB} 
+
+%----------------------------------------------------------------------------------------
+
+\section{Ví dụ liệt kê code ngôn ngữ C/C++}
+
+Code tính khoảng thời gian giữa hai thời điểm cho trước. Lệnh thực hiện là:
+\begin{Verbatim}
+\lstinputlisting{"Code/TimeDiff.cpp"}
+\end{Verbatim}
+
+File \file{TimeDiff.cpp}:
+%https://www.programiz.com/cpp-programming/examples/time-structure
+\lstinputlisting{"Code/TimeDiff.cpp"}
+
+
+%----------------------------------------------------------------------------------------
+
+\section{Ví dụ liệt kê thông tin ở terminal (console/command prompt) từ file text}
+
+Sau khi biên dịch và chạy file \file{TimeDiff.cpp}, kết quả chạy được hiển thị ở terminal. Trong trường hợp bạn muốn liệt kê quá trình chạy, bạn có thể copy đoạn text ở terminal vào một file text, và liệt kê chúng chẳng hạn như:
+\begin{Verbatim}
+\lstinputlisting[style=console]{"Code/TimeDiff.txt"}
+\end{Verbatim}
+
+File \file{TimeDiff.txt}:
+\lstinputlisting[style=console]{"Code/TimeDiff.txt"}
+
+
+%----------------------------------------------------------------------------------------
+
+\section{Ví dụ liệt kê code ngôn ngữ Python}
+
+Code tính mã hash của một file. Lệnh thực hiện là:
+\begin{Verbatim}
+\lstinputlisting[style=codePython]{"Code/Hash.py"}
+\end{Verbatim}
+
+File \file{Hash.py}:
+%https://www.programiz.com/python-programming/examples/hash-file
+\lstinputlisting[style=codePython]{"Code/Hash.py"}
+
+
+%----------------------------------------------------------------------------------------
+
+\section{Ví dụ liệt kê code ngôn ngữ Matlab}
+
+Code biểu diễn bản chất và sai số của phương pháp Euler và Heun trong việc giải phương trình vi phân. Lệnh thực hiện là:
+\begin{Verbatim}
+\lstinputlisting[style=codeMatlab]{"Code/EulerVisualization.m"}
+\end{Verbatim}
+
+File \file{EulerVisualization.m}:
+\lstinputlisting[style=codeMatlab]{"Code/EulerVisualization.m"}
+
+
+%----------------------------------------------------------------------------------------
+
+\section{Ví dụ liệt kê file text thông thường (plain text)}
+
+Một file text lưu giữ thông số của một lần chạy mô phỏng động học phân tử. Lệnh thực hiện là:
+\begin{Verbatim}
+\lstinputlisting[style=plaintext]{"Code/minim.mdp"}
+\end{Verbatim}
+
+File \file{minim.mdp}:
+\lstinputlisting[style=plaintext]{"Code/minim.mdp"}
+
+
+

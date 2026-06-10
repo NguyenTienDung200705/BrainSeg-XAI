@@ -1,0 +1,251 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% BrainSeg-XAI: Hệ thống Phân đoạn Khối u Não và Trí tuệ Nhân tạo Có thể Giải thích
+% Lớp Kỹ thuật Điện tử và Tin học K68 - Khoa Vật lý
+% Trường Đại học Khoa học Tự nhiên, ĐHQGHN
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 1: CÁC PACKAGE CƠ BẢN VÀ CÁC TÙY CHỈNH VĂN BẢN
+%----------------------------------------------------------------------------------------
+
+\documentclass[
+12pt,
+oneside,
+english,
+doublespacing,
+nolistspacing,
+liststotoc,
+parskip,
+headsepline,
+chapterinoneline,
+]{HUSdissertation}
+
+\usepackage[utf8]{vietnam}
+
+\usepackage{mathptmx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\allowdisplaybreaks
+
+\usepackage[backend=bibtex,style=numeric,citestyle=ieee,natbib=true]{biblatex}
+
+\addbibresource{main.bib}
+
+\usepackage[autostyle=true]{csquotes}
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 2: CÁC PACKAGE BỔ TRỢ THÊM VÀO TRONG QUÁ TRÌNH BIÊN SOẠN
+%----------------------------------------------------------------------------------------
+
+\newcommand\ttb{\bfseries\ttfamily}
+\RequirePackage{setlst}
+
+\usepackage{multirow}
+\usepackage{subfigure}
+\usepackage[fontsize=13pt]{scrextend}
+
+\usepackage{titlesec}
+
+\titleformat{\section}
+{\normalfont\fontsize{13}{13}\bfseries}{\thesection}{1em}{}
+
+\titleformat{\subsection}
+{\normalfont\fontsize{13}{13}\bfseries\itshape}{\thesubsection}{1em}{}
+
+\usepackage{fancyvrb}
+\fvset{tabsize=4,vspace=0pt,fontsize=\footnotesize}
+
+\usepackage{longtable}
+
+\usepackage[figuresright]{rotating}
+\usepackage{tabularx}
+
+\usepackage{fontawesome5}
+
+\usepackage{tikz}
+\usetikzlibrary{calc}
+
+\usepackage{indentfirst}
+\setlength{\parindent}{0.5cm}
+
+\usepackage{dirtree}
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 3: THÔNG TIN VỀ TIỂU LUẬN
+%----------------------------------------------------------------------------------------
+
+\thesistitle{BrainSeg-XAI: Hệ thống Phân đoạn Khối u Não từ Ảnh MRI sử dụng Học Sâu và Trí tuệ Nhân tạo Có thể Giải thích}
+
+\supervisor{GS.TS. Nguyễn Thế Toàn}
+\supervisorr{CN. Vi Anh Quân}
+
+\field{Ngành Kỹ thuật Điện tử và Tin học}
+\program{Chương trình đào tạo chuẩn}
+\doctype{Đề tài Nhập môn Trí tuệ nhân tạo}
+
+\university{\href{http://hus.vnu.edu.vn}{Trường Đại học Khoa học Tự nhiên}}
+\department{\href{http://hus.vnu.edu.vn/gioi-thieu/co-cau-to-chuc/khoa-truc-thuoc/khoa-vat-ly.html}{Khoa Vật lý}}
+
+\AtBeginDocument{
+	\hypersetup{pdftitle=\ttitle}
+	% \hypersetup{pdfauthor=\authorname}
+}
+
+
+\begin{document}
+
+\lstset{style=codePython}
+
+\frontmatter
+
+\pagestyle{plain}
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 4: TRANG TIÊU ĐỀ/TRANG BÌA
+%----------------------------------------------------------------------------------------
+
+\include{main-cover}
+\include{sub-cover}
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 5: DANH NGÔN
+%----------------------------------------------------------------------------------------
+
+\vspace*{0.2\textheight}
+
+\noindent\enquote{\itshape
+	The goal is to turn data into information, and information into insight.
+}\bigbreak
+
+\hfill Carly Fiorina
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 6: LỜI CẢM ƠN
+%----------------------------------------------------------------------------------------
+
+\begin{acknowledgements}
+	\addchaptertocentry{\acknowledgementname}
+	\thispagestyle{empty}
+
+	Em xin bày tỏ lòng biết ơn chân thành đến giảng viên hướng dẫn, người đã tận tình định hướng và hỗ trợ em trong suốt quá trình thực hiện tiểu luận này.
+
+	Đề tài \textit{BrainSeg-XAI} là cơ hội để em ứng dụng kiến thức học sâu và trí tuệ nhân tạo vào bài toán y tế có giá trị thực tiễn cao: phân đoạn khối u não từ ảnh MRI. Trong quá trình xây dựng hệ thống, em đã học hỏi được nhiều kinh nghiệm quý báu về thiết kế mô hình học sâu, triển khai dịch vụ web, và xây dựng hệ thống AI có khả năng giải thích được kết quả dự đoán.
+
+	Em cũng xin gửi lời cảm ơn đến cộng đồng mã nguồn mở đã cung cấp các thư viện PyTorch, segmentation-models-pytorch, FastAPI và React -- những nền tảng kỹ thuật quan trọng giúp hiện thực hóa ý tưởng của đề tài.
+
+	Em nhận thức rõ những hạn chế còn tồn tại trong bài làm và rất mong nhận được ý kiến đóng góp từ thầy/cô để tiếp tục cải thiện chất lượng nghiên cứu trong tương lai.
+\end{acknowledgements}
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 7: MỤC LỤC
+%----------------------------------------------------------------------------------------
+
+\begin{spacing}{1.15}
+	\tableofcontents
+\end{spacing}
+
+\begin{spacing}{1.15}
+	\listoffigures
+\end{spacing}
+
+\begin{spacing}{1.15}
+	\listoftables
+\end{spacing}
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 8: DANH SÁCH TÊN VIẾT TẮT
+%----------------------------------------------------------------------------------------
+
+\begin{abbreviations}{ll}
+
+\textbf{AI}    & \textbf{A}rtificial \textbf{I}ntelligence (Trí tuệ nhân tạo)\\
+\textbf{XAI}   & e\textbf{X}plainable \textbf{A}rtificial \textbf{I}ntelligence (AI có thể giải thích)\\
+\textbf{CNN}   & \textbf{C}onvolutional \textbf{N}eural \textbf{N}etwork (Mạng nơ-ron tích chập)\\
+\textbf{MRI}   & \textbf{M}agnetic \textbf{R}esonance \textbf{I}maging (Chụp cộng hưởng từ)\\
+\textbf{CAD}   & \textbf{C}omputer-\textbf{A}ided \textbf{D}iagnosis (Chẩn đoán hỗ trợ máy tính)\\
+\textbf{Grad-CAM} & \textbf{G}radient-weighted \textbf{C}lass \textbf{A}ctivation \textbf{M}apping\\
+\textbf{SMP}   & \textbf{S}egmentation \textbf{M}odels \textbf{P}yTorch\\
+\textbf{API}   & \textbf{A}pplication \textbf{P}rogramming \textbf{I}nterface\\
+\textbf{GPU}   & \textbf{G}raphics \textbf{P}rocessing \textbf{U}nit\\
+\textbf{CPU}   & \textbf{C}entral \textbf{P}rocessing \textbf{U}nit\\
+\textbf{LGG}   & \textbf{L}ow-\textbf{G}rade \textbf{G}lioma (U thần kinh độ thấp)\\
+\textbf{ReLU}  & \textbf{R}ectified \textbf{L}inear \textbf{U}nit\\
+\textbf{BN}    & \textbf{B}atch \textbf{N}ormalization (Chuẩn hóa theo lô)\\
+\textbf{CT}    & \textbf{C}omputed \textbf{T}omography (Chụp cắt lớp vi tính)\\
+\textbf{PET}   & \textbf{P}ositron \textbf{E}mission \textbf{T}omography\\
+\textbf{RGB}   & \textbf{R}ed-\textbf{G}reen-\textbf{B}lue (Không gian màu)\\
+\textbf{REST}  & \textbf{RE}presentational \textbf{S}tate \textbf{T}ransfer\\
+\textbf{JSON}  & \textbf{J}ava\textbf{S}cript \textbf{O}bject \textbf{N}otation\\
+
+\end{abbreviations}
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 9: DANH SÁCH KÝ HIỆU
+%----------------------------------------------------------------------------------------
+
+\begin{symbols}{lll}
+
+$x$             & Vector đầu vào của mạng nơ-ron                  & --\\
+$\hat{y}$       & Đầu ra dự đoán (logit hoặc xác suất)            & --\\
+$y$             & Nhãn thực tế (ground truth mask)                 & --\\
+$\sigma(\cdot)$ & Hàm kích hoạt sigmoid                           & --\\
+$\mathcal{L}$   & Hàm mất mát (loss function)                     & --\\
+$\alpha_k$      & Trọng số Grad-CAM cho kênh đặc trưng $k$        & --\\
+$A^k$           & Bản đồ kích hoạt (feature map) kênh $k$         & --\\
+$L^{\text{Grad-CAM}}$ & Bản đồ Grad-CAM                           & --\\
+
+\addlinespace
+
+$\text{Dice}$   & Hệ số Dice                                      & --\\
+$\text{IoU}$    & Intersection over Union                         & --\\
+$P$             & Precision (Độ chính xác)                        & --\\
+$R$             & Recall (Độ phủ)                                 & --\\
+$S_{\text{risk}}$ & Điểm rủi ro tổng hợp ($0$--$100$)            & --\\
+
+\end{symbols}
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 12: NỘI DUNG CÁC CHƯƠNG
+%----------------------------------------------------------------------------------------
+
+\mainmatter
+
+\pagestyle{plain}
+
+\include{Chapters/Chapter0}
+\include{Chapters/Chapter1}
+\include{Chapters/Chapter2}
+\include{Chapters/Chapter3}
+\include{Chapters/Chapter4}
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 13: TÀI LIỆU THAM KHẢO
+%----------------------------------------------------------------------------------------
+
+\begin{spacing}{1.15}
+	\printbibliography[heading=bibintoc, title=Tài liệu tham khảo]
+\end{spacing}
+
+
+%----------------------------------------------------------------------------------------
+%	PHẦN 14: PHỤ LỤC
+%----------------------------------------------------------------------------------------
+
+\appendix
+
+\include{Appendices/AppendixA}
+
+%----------------------------------------------------------------------------------------
+
+\end{document}

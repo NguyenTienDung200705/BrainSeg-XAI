@@ -1,0 +1,87 @@
+% Chương 5: Kết luận và hướng phát triển
+
+\chapter{Kết luận và hướng phát triển}
+
+\label{Chapter5}
+
+%----------------------------------------------------------------------------------------
+
+\section{Tổng kết đóng góp}
+
+Tiểu luận này đã trình bày thiết kế và hiện thực hóa hệ thống \textbf{BrainSeg-XAI} -- một hệ thống hỗ trợ chẩn đoán u não từ ảnh MRI kết hợp học sâu với cơ chế giải thích AI có thể hiểu được. Các đóng góp chính của đề tài bao gồm:
+
+\textbf{1. Kiến trúc pipeline hoàn chỉnh.}
+Hệ thống kết hợp liền mạch bốn thành phần: phân đoạn học sâu (U-Net/U-Net++), giải thích Grad-CAM, trích xuất đặc trưng hình thái và đánh giá rủi ro lâm sàng -- trong một dịch vụ web thống nhất trả về kết quả trong dưới hai giây.
+
+\textbf{2. Cơ chế nhận dạng checkpoint linh hoạt.}
+Logic tự động phân biệt vanilla UNet và SMP dựa trên tên khóa \texttt{state\_dict} cho phép triển khai linh hoạt với nhiều kiến trúc mô hình khác nhau, không yêu cầu cấu hình thủ công.
+
+\textbf{3. Hệ thống đánh giá rủi ro có cấu trúc.}
+Bộ máy sáu quy tắc độc lập với điểm số cộng dồn tạo ra đánh giá rủi ro \textit{có thể giải thích được}: mỗi quy tắc kích hoạt đều kèm theo mô tả nguyên nhân và khuyến nghị lâm sàng cụ thể.
+
+\textbf{4. Giao diện web đầy đủ tính năng.}
+Frontend React với năm chế độ xem ảnh và bảng rủi ro động giúp người dùng không chuyên có thể đọc và hiểu kết quả trực tiếp.
+
+Về mặt hiệu suất kỹ thuật, mô hình U-Net++ với encoder EfficientNet-B4 đạt DSC = 0.871 và IoU = 0.798 trên tập kiểm thử LGG MRI -- kết quả cạnh tranh so với các phương pháp trong tài liệu trên cùng bộ dữ liệu.
+
+\section{Hạn chế hiện tại}
+
+\textbf{1. Phạm vi dữ liệu hạn hẹp.}
+Hệ thống được huấn luyện và đánh giá trên bộ dữ liệu LGG (u độ thấp) thuần nhất. Hiệu suất trên dữ liệu GBM (glioblastoma), u di căn, hoặc các loại u não khác chưa được kiểm chứng.
+
+\textbf{2. Xử lý ảnh 2D đơn lẻ.}
+Hệ thống chỉ xử lý từng lát cắt MRI riêng lẻ, không tận dụng thông tin không gian 3D từ toàn bộ sequence lát cắt. Điều này giới hạn khả năng ước lượng thể tích khối u.
+
+\textbf{3. Bộ máy luật không được xác thực lâm sàng.}
+Các ngưỡng và trọng số điểm trong bộ máy luật được xác định theo tham khảo tài liệu và chưa trải qua quá trình xác thực prospective với bác sĩ chuyên khoa. Đây là điều kiện tiên quyết trước khi triển khai trong môi trường lâm sàng thực tế.
+
+\textbf{4. Thiếu đánh giá bất biến (calibration).}
+Mô hình chưa được kiểm tra độ hiệu chỉnh xác suất (calibration): xác suất sigmoid đầu ra có thực sự phản ánh tần suất dự đoán đúng không?
+
+\textbf{5. Phụ thuộc vào chất lượng ảnh đầu vào.}
+Hệ thống chưa có cơ chế phát hiện ảnh chất lượng kém (nhiễu cao, thiếu tương phản, định hướng không chuẩn) và chưa thực hiện chuẩn hóa cường độ theo từng máy MRI.
+
+\section{Hướng phát triển}
+
+\subsection{Mở rộng sang phân đoạn 3D}
+
+Bước phát triển tự nhiên là xử lý toàn bộ sequence MRI dưới dạng khối 3D. Các kiến trúc như 3D U-Net hoặc nnU-Net cho phép học được đặc trưng không gian ba chiều, cải thiện đáng kể độ chính xác phân đoạn và cho phép tính thể tích khối u trực tiếp.
+
+\subsection{Đa phương thức và đa chuỗi xung}
+
+Kết hợp đồng thời nhiều chuỗi xung MRI (T1, T2, FLAIR, T1-Gd) như trong chuẩn cuộc thi BraTS \cite{Menze2015} cho phép khai thác tương quan thông tin giữa các chuỗi, cải thiện độ chính xác phân đoạn các tiểu vùng khối u (tumor core, enhancing tumor, edema).
+
+\subsection{Xác thực lâm sàng}
+
+Để hướng tới ứng dụng thực tế, cần thực hiện:
+\begin{itemize}
+    \item Xác thực prospective các ngưỡng trong bộ máy luật với bác sĩ chuyên khoa thần kinh và chẩn đoán hình ảnh.
+    \item Đánh giá inter-rater agreement giữa chú thích của hệ thống và của bác sĩ.
+    \item Tuân thủ quy định y tế như FDA 510(k) hoặc CE Mark tùy thị trường.
+\end{itemize}
+
+\subsection{Cải tiến giao diện và tích hợp PACS}
+
+Tích hợp với hệ thống Picture Archiving and Communication System (PACS) của bệnh viện giúp nhận ảnh DICOM trực tiếp từ thiết bị MRI, không cần bước chuyển đổi định dạng thủ công. Giao diện có thể mở rộng hỗ trợ xem lát cắt 3D (MPR viewer), xuất báo cáo PDF và lưu trữ kết quả theo bệnh nhân.
+
+\subsection{Cải thiện khả năng giải thích}
+
+Ngoài Grad-CAM, có thể tích hợp thêm:
+\begin{itemize}
+    \item \textit{SHAP (SHapley Additive exPlanations)} để giải thích đóng góp của từng đặc trưng hình thái vào điểm rủi ro.
+    \item \textit{Attention maps} từ kiến trúc transformer để bổ sung góc nhìn giải thích khác.
+    \item \textit{Uncertainty quantification} (Monte Carlo Dropout) để ước tính độ không chắc chắn của dự đoán.
+\end{itemize}
+
+\subsection{Triển khai và khả năng mở rộng}
+
+Container hóa Docker Compose đã được chuẩn bị. Hướng phát triển tiếp theo có thể là:
+\begin{itemize}
+    \item Triển khai lên cloud với auto-scaling để phục vụ nhiều yêu cầu đồng thời.
+    \item Xây dựng pipeline CI/CD tự động kiểm thử và triển khai phiên bản mới.
+    \item Bổ sung caching kết quả inference để tránh tính toán lại với ảnh giống nhau.
+\end{itemize}
+
+\section{Kết luận chung}
+
+BrainSeg-XAI thể hiện rằng việc xây dựng một hệ thống AI y tế \textit{có thể giải thích được} là khả thi với các công nghệ nguồn mở hiện có. Hệ thống không chỉ dừng lại ở việc tạo ra mặt nạ phân đoạn, mà còn cung cấp cơ chế giải thích đa lớp: Grad-CAM ở cấp độ pixel, đặc trưng hình thái ở cấp độ vùng, và đánh giá rủi ro có cấu trúc ở cấp độ lâm sàng. Đây là hướng tiếp cận phù hợp với xu hướng phát triển của AI y tế: không thay thế bác sĩ, mà trang bị cho họ công cụ phân tích mạnh mẽ và minh bạch hơn để đưa ra quyết định lâm sàng chính xác.
