@@ -429,6 +429,9 @@ Body: file=<MRI image (JPEG/PNG/TIFF)>
 
 ![Training Curve](HUS-Dissertation-Template-main%20(1)/HUS-Dissertation-Template-main/Figures/Chapter/Chapter7.png)
 
+![Training Curve](HUS-Dissertation-Template-main%20(1)/HUS-Dissertation-Template-main/Figures/Chapter/Chapter8.png)
+
+
 ## 👨‍💻 Tác giả
 
 **Nguyen Tien Dung**
@@ -439,7 +442,7 @@ Lĩnh vực chuyên môn: AI · Computer Vision · Medical Imaging · Explainabl
 
 ## 📄 Giấy phép
 
-Dự án này được phân phối dưới giấy phép [MIT License](LICENSE).
+Dự án này được phân phối dưới giấy phép [MIT License](LICENSE). 
 
 ---
 
