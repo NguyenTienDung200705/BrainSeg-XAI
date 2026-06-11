@@ -6,6 +6,8 @@ import UploadZone from './components/UploadZone';
 import ProcessingPanel from './components/ProcessingPanel';
 import ImageViewer from './components/ImageViewer';
 import RiskPanel from './components/RiskPanel';
+import MedicalChatbot from './components/MedicalChatbot';
+import ChatToggleButton from './components/ChatToggleButton';
 import { predictTumor } from './services/api';
 
 // Simulated progress while waiting for response
@@ -41,7 +43,8 @@ function useSimProgress(active) {
 }
 
 export default function App() {
-  const [phase, setPhase] = useState('idle'); // idle | processing | result | error
+  const [phase, setPhase] = useState('idle');
+  const [chatOpen, setChatOpen] = useState(false); // idle | processing | result | error
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [previewSrc, setPreviewSrc] = useState(null);
@@ -65,6 +68,7 @@ export default function App() {
       setTimeout(() => {
         setResult(data);
         setPhase('result');
+        setChatOpen(true); // auto-mở chatbot khi có kết quả
       }, 400);
     } catch (err) {
       cleanup?.();
@@ -259,7 +263,7 @@ export default function App() {
               </div>
 
               {/* Right: analysis */}
-              <RiskPanel risk={result.risk} features={result.features} />
+              <RiskPanel risk={result.risk} features={result.features} onAskChatbot={(q) => { setChatOpen(true); window.__chatbotAsk && window.__chatbotAsk(q); }} />
             </div>
           </>
         )}
@@ -274,6 +278,19 @@ export default function App() {
           ⚠️ Chỉ dùng cho mục đích nghiên cứu & học thuật. Không thay thế chẩn đoán y khoa chính thức.
         </div>
       </footer>
+
+      {/* ===== CHATBOT ===== */}
+      {!chatOpen && (
+        <ChatToggleButton
+          isOpen={false}
+          onClick={() => setChatOpen(true)}
+        />
+      )}
+      <MedicalChatbot
+        isOpen={chatOpen}
+        onToggle={() => setChatOpen(c => !c)}
+        analysisResult={result}
+      />
     </div>
   );
 }

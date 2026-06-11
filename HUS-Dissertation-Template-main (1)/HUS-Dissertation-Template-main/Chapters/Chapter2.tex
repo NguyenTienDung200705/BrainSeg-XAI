@@ -275,21 +275,11 @@ Tỷ lệ chu vi trên căn bậc hai diện tích phản ánh mức độ gồ 
 trong đó $c_x$ là tọa độ x tâm khối u và $W$ là chiều rộng ảnh. Dịch chuyển quá 10\% từ đường giữa là chỉ điểm lâm sàng quan trọng về tình trạng hiệu ứng khối.
 
 \textbf{Ước lượng tỷ lệ diện tích khối u:}
-Thay vì chuyển đổi sang đơn vị diện tích vật lý, ta ước lượng mức độ tổn thương bằng tỷ lệ phần trăm giữa diện tích khối u và diện tích não trên lát cắt MRI. Cụ thể, tỷ lệ này được tính theo công thức:
-
-\begin{equation}
-S_{tumor} \, (\text{cm}^2) = \frac{\text{Tumor Ratio}}{100} \times S_{brain}
-\end{equation}
-
-Trong đó:
-\begin{itemize}
-    \item $S_{tumor}$ là số pixel thuộc vùng khối u
-    \item $S_{brain}$ là tổng số pixel của vùng não trong ảnh
-\end{itemize}
+Thay vì chuyển đổi sang đơn vị diện tích vật lý, ta ước lượng mức độ tổn thương bằng tỷ lệ phần trăm giữa diện tích khối u và diện tích não trên lát cắt MRI.
 
 Cách tiếp cận này giúp loại bỏ yêu cầu hiệu chuẩn theo đơn vị vật lý và phù hợp hơn với các mô hình học sâu trong bài toán phân đoạn ảnh y tế, nơi mục tiêu chính là đánh giá mức độ tổn thương tương đối thay vì giá trị tuyệt đối.
 
-\section{Hệ thống phân loại cấp độ nguy hiểm (Rule-based Risk Engine)}
+\section{Hệ thống phân loại cấp độ nguy hiểm}
 
 \subsection{Thiết kế hệ thống}
 Hệ thống cấp độ nguy hiểm được thiết kế theo nguyên lý \textit{additive scoring}: mỗi quy tắc cộng một điểm cố định vào điểm rủi ro tổng hợp $S_{\text{risk}}$, giới hạn tối đa 100. Thiết kế này cho phép truy vết nguyên nhân đóng góp vào điểm rủi ro cuối cùng. Sáu quy tắc hiện có:
@@ -312,8 +302,8 @@ Hệ thống cấp độ nguy hiểm được thiết kế theo nguyên lý \tex
         R4: Dịch chuyển đường giữa  & midline\_shift = True       & $+20$ \\
         R5: Số vùng khối u          & num\_regions $> 3$          & $+15$ \\
                                      & num\_regions $> 1$          & $+8$  \\
-        R6: Diện tích tuyệt đối     & area $> 10$ cm²             & $+15$ \\
-                                     & area $> 4$ cm²              & $+8$  \\
+        R6: Diện tích tuyệt đối     & area $> 10$ px²             & $+15$ \\
+                                     & area $> 4$ px²              & $+8$  \\
         \bottomrule
     \end{tabular}
 \end{table}

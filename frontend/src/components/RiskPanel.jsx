@@ -53,7 +53,7 @@ function RiskGauge({ score, color }) {
   );
 }
 
-export default function RiskPanel({ risk, features }) {
+export default function RiskPanel({ risk, features, onAskChatbot }) {
   const color = risk.risk_color;
 
   const levelEmoji = {
@@ -198,6 +198,41 @@ export default function RiskPanel({ risk, features }) {
           ))}
         </div>
       </div>
+
+      {/* ASK CHATBOT BUTTON */}
+      {onAskChatbot && (
+        <div className="card animate-in" style={{
+          background: 'linear-gradient(135deg, rgba(0,200,255,0.06), rgba(0,255,136,0.03))',
+          border: '1px solid rgba(0,200,255,0.2)',
+        }}>
+          <div style={{ padding: '16px 20px' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(0,200,255,0.6)', marginBottom: 10, letterSpacing: '0.08em' }}>
+              🧠 HỎI THÊM VỀ KẾT QUẢ NÀY
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {[
+                'Kết quả này có nguy hiểm không?',
+                'Giải thích độ bất đối xứng ' + features.shape_irregularity?.toFixed(2),
+                'Tỷ lệ chiếm não ' + features.occupancy_ratio + '% có nghĩa gì?',
+                'Tôi cần làm gì tiếp theo?',
+                features.midline_shift ? 'Midline shift ảnh hưởng thế nào?' : 'Diện tích ' + features.tumor_area_cm2 + ' cm² có lớn không?',
+              ].map(q => (
+                <button key={q} onClick={() => onAskChatbot(q)} style={{
+                  background: 'rgba(0,200,255,0.05)',
+                  border: '1px solid rgba(0,200,255,0.15)',
+                  borderRadius: 20, padding: '6px 12px',
+                  fontFamily: 'var(--font-body)', fontSize: 11.5,
+                  color: 'rgba(160,210,240,0.8)', cursor: 'pointer',
+                  transition: 'all 0.2s', textAlign: 'left',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background='rgba(0,200,255,0.12)'; e.currentTarget.style.color='var(--cyan)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background='rgba(0,200,255,0.05)'; e.currentTarget.style.color='rgba(160,210,240,0.8)'; }}
+                >{q}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* XAI EXPLANATION */}
       <div className="card animate-in">

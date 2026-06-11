@@ -9,8 +9,10 @@
 Phụ lục này trình bày toàn bộ mã nguồn của các module cốt lõi trong hệ thống BrainSeg-XAI.
 Mã nguồn được tổ chức theo cấu trúc thư mục thực tế của dự án.
 
+Github: https://github.com/NguyenTienDung200705/BrainSeg-XAI.git
+
 %----------------------------------------------------------------------------------------
-\section{Backend -- Ứng dụng FastAPI chính (\texttt{app/main.py})}
+\section{Backend -- Ứng dụng FastAPI chính }
 %----------------------------------------------------------------------------------------
 
 \begin{lstlisting}[style=codePython, caption={FastAPI -- Khoi tao app va CORS middleware (app/main.py)}]
@@ -44,7 +46,7 @@ async def root():
 \end{lstlisting}
 
 %----------------------------------------------------------------------------------------
-\section{Backend -- Endpoint dự đoán (\texttt{app/api/predict.py})}
+\section{Backend -- Endpoint dự đoán}
 %----------------------------------------------------------------------------------------
 
 \begin{lstlisting}[style=codePython, caption={REST API endpoint nhan anh MRI va tra ket qua phan tich (app/api/predict.py)}]
@@ -88,7 +90,7 @@ async def health():
 \end{lstlisting}
 
 %----------------------------------------------------------------------------------------
-\section{Backend -- Tiện ích xử lý ảnh (\texttt{app/utils/image\_utils.py})}
+\section{Backend -- Tiện ích xử lý ảnh}
 %----------------------------------------------------------------------------------------
 
 \begin{lstlisting}[style=codePython, caption={Tien xu ly anh MRI: doc, resize 256x256, chuan hoa ImageNet (app/utils/image\_utils.py)}]
@@ -151,7 +153,7 @@ def overlay_heatmap(img_rgb: np.ndarray, heatmap_rgb: np.ndarray,
 \end{lstlisting}
 
 %----------------------------------------------------------------------------------------
-\section{Backend -- Định nghĩa mô hình (\texttt{app/models/unet.py})}
+\section{Backend -- Định nghĩa mô hình}
 %----------------------------------------------------------------------------------------
 
 \begin{lstlisting}[style=codePython, caption={Vanilla UNet va SMP wrapper -- ho tro U-Net va U-Net++ (app/models/unet.py)}]
@@ -258,7 +260,7 @@ def get_model(arch="unetplusplus", encoder="efficientnet-b4",
 \end{lstlisting}
 
 %----------------------------------------------------------------------------------------
-\section{Backend -- Dịch vụ suy luận (\texttt{app/services/inference.py})}
+\section{Backend -- Dịch vụ suy luận}
 %----------------------------------------------------------------------------------------
 
 \begin{lstlisting}[style=codePython, caption={Lazy model loading, auto-detect checkpoint va dieu phoi prediction pipeline (app/services/inference.py)}]
@@ -400,10 +402,10 @@ def predict(img_rgb: np.ndarray) -> dict:
 \end{lstlisting}
 
 %----------------------------------------------------------------------------------------
-\section{Backend -- Module Grad-CAM (\texttt{app/xai/gradcam.py})}
+\section{Backend -- Module Grad-CAM}
 %----------------------------------------------------------------------------------------
 
-\begin{lstlisting}[style=codePython, caption={Trien khai Grad-CAM voi PyTorch forward/backward hooks (app/xai/gradcam.py)}]
+\begin{lstlisting}[style=codePython, caption={Trien khai Grad-CAM voi PyTorch forward/backward hooks }]
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -488,10 +490,10 @@ def get_target_layer(model, model_type: str = "vanilla"):
 \end{lstlisting}
 
 %----------------------------------------------------------------------------------------
-\section[Backend -- Trích xuất đặc trưng]{Backend -- Trích xuất đặc trưng (\texttt{feature\_extraction.py})}
+\section[Backend -- Trích xuất đặc trưng]{Backend -- Trích xuất đặc trưng}
 %----------------------------------------------------------------------------------------
 
-\begin{lstlisting}[style=codePython, caption={Tinh toan dac trung hinh thai hoc tu mat na nhi phan (app/services/feature\_extraction.py)}]
+\begin{lstlisting}[style=codePython, caption={Tinh toan dac trung hinh thai hoc tu mat na nhi phan}]
 import numpy as np
 from scipy import ndimage
 from skimage import measure
@@ -570,445 +572,3 @@ def extract_features(mask: np.ndarray, img_shape: tuple) -> dict:
     }
 \end{lstlisting}
 
-%----------------------------------------------------------------------------------------
-\section{Backend -- Bộ máy luật y khoa (\texttt{app/rules/medical\_rules.py})}
-%----------------------------------------------------------------------------------------
-
-\begin{lstlisting}[style=codePython, caption={Rule-based risk engine -- 6 quy tac, additive scoring, 4 muc rui ro (app/rules/medical\_rules.py)}]
-from dataclasses import dataclass, field
-from typing import List
-
-@dataclass
-class RuleResult:
-    risk_level:      str   # "Thap" | "Trung binh" | "Cao" | "Rat cao"
-    risk_score:      int   # 0-100
-    severity:        str   # "Binh thuong" | "Nhe" | ... | "Nguy kich"
-    risk_color:      str   # hex color cho UI
-    fired_rules:     List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
-    explanation:     str = ""
-
-def evaluate_risk(features: dict) -> RuleResult:
-    if not features.get("tumor_detected", False):
-        return RuleResult(
-            risk_level="Thap", risk_score=0,
-            severity="Binh thuong", risk_color="#00ff88",
-            fired_rules=["Khong phat hien khoi u trong anh MRI"],
-            recommendations=["Tiep tuc theo doi dinh ky",
-                             "Chup MRI kiem tra sau 12 thang"],
-            explanation="Khong phat hien bat ky vung bat thuong nao.")
-
-    score = 0
-    fired, recs = [], []
-
-    occ   = features["occupancy_ratio"]
-    irr   = features["shape_irregularity"]
-    bnd   = features["boundary_complexity"]
-    mid   = features["midline_shift"]
-    n_reg = features["num_regions"]
-    area  = features["tumor_area_cm2"]
-
-    # Rule 1: Occupancy ratio
-    if occ > 20:
-        score += 30
-        fired.append(f"Ty le chiem vung nao rat cao ({occ}% > 20%)")
-        recs.append("Can can thiep phau thuat khan cap")
-    elif occ > 10:
-        score += 20
-        fired.append(f"Ty le chiem vung nao cao ({occ}% > 10%)")
-        recs.append("Hoi chan chuyen khoa than kinh ngay")
-    elif occ > 5:
-        score += 10
-        fired.append(f"Ty le chiem vung nao o muc trung binh ({occ}%)")
-        recs.append("Theo doi sat va chup MRI dinh ky 3 thang/lan")
-    else:
-        fired.append(f"Ty le chiem vung nao thap ({occ}%)")
-
-    # Rule 2: Shape irregularity
-    if irr > 0.7:
-        score += 25
-        fired.append(
-            f"Hinh dang khoi u rat bat doi xung (irr={irr:.2f})")
-        recs.append("Sinh thiet de xac dinh tinh ac tinh")
-    elif irr > 0.5:
-        score += 15
-        fired.append(
-            f"Hinh dang khoi u bat doi xung vua (irr={irr:.2f})")
-    else:
-        fired.append(
-            f"Hinh dang khoi u tuong doi deu dan (irr={irr:.2f})")
-
-    # Rule 3: Boundary complexity
-    if bnd > 15:
-        score += 20
-        fired.append(
-            f"Duong bien khoi u rat phuc tap (complexity={bnd:.1f})")
-        recs.append("Chi dinh PET-CT de danh gia do xam lan")
-    elif bnd > 10:
-        score += 10
-        fired.append(
-            f"Duong bien khoi u phuc tap vua (complexity={bnd:.1f})")
-    else:
-        fired.append(
-            f"Duong bien khoi u tuong doi don gian (complexity={bnd:.1f})")
-
-    # Rule 4: Midline shift
-    if mid:
-        score += 20
-        fired.append(
-            "Co dau hieu dich chuyen duong giua nao (Midline Shift)")
-        recs.append(
-            "Theo doi ap luc noi so, xem xet can thiep giai ap")
-
-    # Rule 5: Multiple regions
-    if n_reg > 3:
-        score += 15
-        fired.append(
-            f"Phat hien nhieu vung khoi u ({n_reg} vung) -- nghi di can")
-        recs.append("Chup MRI toan than, tim kiem o di can nguyen phat")
-    elif n_reg > 1:
-        score += 8
-        fired.append(f"Phat hien {n_reg} vung khoi u rieng biet")
-
-    # Rule 6: Absolute size
-    if area > 10:
-        score += 15
-        fired.append(f"Dien tich khoi u rat lon ({area} cm2)")
-    elif area > 4:
-        score += 8
-        fired.append(f"Dien tich khoi u trung binh ({area} cm2)")
-    else:
-        fired.append(f"Dien tich khoi u nho ({area} cm2)")
-
-    score = min(score, 100)
-
-    if score >= 70:
-        risk_level, severity, risk_color = (
-            "Rat cao", "Nguy kich", "#ff2d55")
-        recs.insert(0,
-            "KHAN CAP: Can nhap vien va can thiep ngay lap tuc")
-    elif score >= 50:
-        risk_level, severity, risk_color = (
-            "Cao", "Nghiem trong", "#ff6b35")
-        recs.insert(0,
-            "Can dieu tri chuyen khoa trong vong 48 gio")
-    elif score >= 30:
-        risk_level, severity, risk_color = (
-            "Trung binh", "Trung binh", "#ffd60a")
-        if not recs:
-            recs.append("Theo doi va dieu tri theo phac do cua bac si")
-    else:
-        risk_level, severity, risk_color = (
-            "Thap", "Nhe", "#00c896")
-        if not recs:
-            recs.append("Theo doi dinh ky 6 thang/lan")
-
-    explanation = (
-        f"He thong phan tich {len(fired)} dac trung y khoa va kich hoat "
-        f"{sum(1 for r in fired if any(k in r for k in ['cao', 'phuc tap', 'bat doi', 'dich chuyen', 'di can', 'lon']))} "
-        f"co nguy co. Diem nguy co tong hop: {score}/100. "
-        f"Phan loai: {severity}."
-    )
-
-    return RuleResult(
-        risk_level=risk_level, risk_score=score,
-        severity=severity, risk_color=risk_color,
-        fired_rules=fired,
-        recommendations=list(dict.fromkeys(recs)),
-        explanation=explanation,
-    )
-\end{lstlisting}
-
-%----------------------------------------------------------------------------------------
-\section[Frontend -- Thành phần xem ảnh]{Frontend -- Thành phần xem ảnh (\texttt{ImageViewer.jsx})}
-%----------------------------------------------------------------------------------------
-
-\begin{lstlisting}[style=codePython, caption={React component ImageViewer -- hien thi 5 che do xem anh (ImageViewer.jsx)}]
-import { useState } from 'react';
-
-const VIEWS = [
-  { key: 'original_b64', label: 'Anh Goc',      tag: 'MRI RAW'       },
-  { key: 'overlay_b64',  label: 'Mask Overlay',  tag: 'SEGMENTATION'  },
-  { key: 'mask_b64',     label: 'Segmentation',  tag: 'BINARY MASK'   },
-  { key: 'cam_overlay_b64', label: 'XAI Overlay', tag: 'GRAD-CAM'    },
-  { key: 'heatmap_b64',  label: 'Heatmap',       tag: 'ATTENTION MAP' },
-];
-
-export default function ImageViewer({ result }) {
-  const [active, setActive] = useState(0);
-  const current = VIEWS[active];
-  const src = `data:image/png;base64,${result[current.key]}`;
-
-  return (
-    <div className="card animate-in">
-      <div className="card-header">
-        <span className="card-title">Truc quan hoa ket qua</span>
-        <span className="card-tag">{current.tag}</span>
-      </div>
-
-      {/* Tab selector */}
-      <div className="image-tabs">
-        {VIEWS.map((v, i) => (
-          <button
-            key={v.key}
-            className={`img-tab${active === i ? ' active' : ''}`}
-            onClick={() => setActive(i)}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Anh chinh + thumbnails */}
-      <div className="image-display">
-        <div className="img-main-wrapper">
-          <img className="img-main" src={src} alt={current.label} />
-          <div className="img-label">{current.label}</div>
-        </div>
-        <div className="img-thumbs">
-          {VIEWS.map((v, i) => (
-            <div key={v.key}>
-              <div
-                className={`img-thumb${active === i ? ' active' : ''}`}
-                onClick={() => setActive(i)}
-              >
-                <img
-                  src={`data:image/png;base64,${result[v.key]}`}
-                  alt={v.label}
-                />
-              </div>
-              <div className="thumb-label">
-                {v.label.split(' ')[0]}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-\end{lstlisting}
-
-%----------------------------------------------------------------------------------------
-\section[Frontend -- Bảng đánh giá rủi ro]{Frontend -- Bảng đánh giá rủi ro (\texttt{RiskPanel.jsx})}
-%----------------------------------------------------------------------------------------
-
-\begin{lstlisting}[style=codePython, caption={React component RiskPanel -- dong ho rui ro SVG va ket qua phan tich (RiskPanel.jsx)}]
-import { useEffect, useState } from 'react';
-
-function RiskGauge({ score, color }) {
-  const [displayed, setDisplayed] = useState(0);
-  const R = 54;
-  const CIRC = 2 * Math.PI * R;
-
-  useEffect(() => {
-    let start = null;
-    const duration = 1200;
-    const animate = (ts) => {
-      if (!start) start = ts;
-      const prog = Math.min((ts - start) / duration, 1);
-      const ease = 1 - Math.pow(1 - prog, 3); // cubic ease-out
-      setDisplayed(Math.round(score * ease));
-      if (prog < 1) requestAnimationFrame(animate);
-    };
-    requestAnimationFrame(animate);
-  }, [score]);
-
-  const offset = CIRC * (1 - displayed / 100);
-  return (
-    <div className="risk-gauge">
-      <svg width="140" height="140" viewBox="0 0 140 140">
-        <circle cx="70" cy="70" r={R} fill="none"
-          stroke="rgba(0,200,255,0.07)" strokeWidth="10" />
-        <circle cx="70" cy="70" r={R} fill="none"
-          stroke={color} strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray={CIRC}
-          strokeDashoffset={offset}
-          style={{
-            transform: 'rotate(-90deg)',
-            transformOrigin: '70px 70px',
-            filter: `drop-shadow(0 0 8px ${color})`,
-          }}
-        />
-      </svg>
-      <div className="risk-number">
-        <span style={{ color }}>{displayed}</span>
-        <small>/100</small>
-      </div>
-    </div>
-  );
-}
-
-export default function RiskPanel({ risk, features }) {
-  const color = risk.risk_color;
-  const levelEmoji = {
-    'Rat cao': 'Nguy kich', 'Cao': 'Nghiem trong',
-    'Trung binh': 'Trung binh', 'Thap': 'Nhe',
-  }[risk.risk_level] || '';
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-      {/* Diem nguy co */}
-      <div className="card risk-card animate-in">
-        <div className="card-header">
-          <span className="card-title">Danh gia nguy co lam sang</span>
-        </div>
-        <div className="risk-score-display">
-          <RiskGauge score={risk.risk_score} color={color} />
-          <div className="risk-level-badge"
-            style={{ color, border: `1px solid ${color}40` }}>
-            Nguy co {risk.risk_level}
-          </div>
-          <div className="risk-severity">
-            Muc do: <span style={{ color }}>{risk.severity}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Luat da kich hoat */}
-      <div className="card animate-in">
-        <div className="card-header">
-          <span className="card-title">Luat y khoa kich hoat</span>
-          <span className="card-tag">{risk.fired_rules.length} luat</span>
-        </div>
-        <div className="rules-list">
-          {risk.fired_rules.map((rule, i) => (
-            <div key={i} className="rule-item">
-              <span className="rule-icon">
-                {rule.includes('cao') ? 'WARN' : 'OK'}
-              </span>
-              <span>{rule}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Khuyen nghi lam sang */}
-      <div className="card animate-in">
-        <div className="card-header">
-          <span className="card-title">Khuyen nghi lam sang</span>
-        </div>
-        <div className="rec-list">
-          {risk.recommendations.map((rec, i) => (
-            <div key={i} className="rec-item">
-              <span>-- {rec}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-    </div>
-  );
-}
-\end{lstlisting}
-
-%----------------------------------------------------------------------------------------
-\section{Frontend -- Dịch vụ API client (\texttt{src/services/api.js})}
-%----------------------------------------------------------------------------------------
-
-\begin{lstlisting}[style=codePython, caption={Axios client goi REST API backend (src/services/api.js)}]
-import axios from 'axios';
-
-const API_BASE = process.env.REACT_APP_API_URL
-                 || 'http://localhost:8000';
-
-const api = axios.create({
-  baseURL: `${API_BASE}/api/v1`,
-  timeout: 120000,   // 2 phut timeout cho inference tren CPU
-});
-
-export const predictTumor = async (file, onUploadProgress) => {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await api.post('/predict', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    onUploadProgress,
-  });
-
-  return response.data;
-};
-
-export const checkHealth = async () => {
-  const response = await api.get('/health');
-  return response.data;
-};
-\end{lstlisting}
-
-%----------------------------------------------------------------------------------------
-\section{Docker Compose -- Cấu hình triển khai (\texttt{docker-compose.yml})}
-%----------------------------------------------------------------------------------------
-
-\begin{lstlisting}[style=plaintext, caption={Cau hinh Docker Compose cho trien khai production (docker-compose.yml)}]
-version: '3.8'
-
-services:
-  backend:
-    build: ./backend
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend/weights:/app/weights
-    environment:
-      - PYTHONUNBUFFERED=1
-    restart: unless-stopped
-
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    environment:
-      - REACT_APP_API_URL=http://backend:8000
-    restart: unless-stopped
-\end{lstlisting}
-
-%----------------------------------------------------------------------------------------
-\section{Đoạn trích minh họa -- Nhận dạng và lưu checkpoint}
-%----------------------------------------------------------------------------------------
-
-Mục này trích xuất hai đoạn mã ngắn minh họa cơ chế nhận dạng loại checkpoint và định dạng lưu checkpoint chuẩn được đề cập trong Chương~\ref{Chapter3}.
-
-\subsection*{A.13.1 Nhận dạng loại checkpoint theo tên khóa state\_dict}
-
-\begin{lstlisting}[style=codePython, caption={Nhan dang loai checkpoint theo ten khoa state\_dict (app/services/inference.py)}]
-# doc state_dict tu file .pth
-sd = checkpoint if isinstance(checkpoint, dict) \
-     and "model_state_dict" not in checkpoint \
-     else checkpoint.get("model_state_dict", checkpoint)
-
-keys = list(sd.keys())
-is_vanilla = any(
-    k.startswith("inc.") or k.startswith("down") or k.startswith("up")
-    for k in keys
-)
-
-if is_vanilla:
-    model = UNet(n_channels=3, n_classes=1)
-else:
-    arch    = checkpoint.get("arch",    "unetplusplus")
-    encoder = checkpoint.get("encoder", "efficientnet-b4")
-    model   = build_smp_model(arch, encoder)
-
-model.load_state_dict(sd)
-model.eval()
-\end{lstlisting}
-
-\subsection*{A.13.2 Lưu checkpoint kèm metadata kiến trúc}
-
-\begin{lstlisting}[style=codePython, caption={Luu checkpoint kem metadata kien truc (dung khi ket thuc huan luyen)}]
-# Luu sau khi huan luyen de he thong tu dong nhan dang khi tai lai
-torch.save(
-    {
-        "arch":             "unetplusplus",
-        "encoder":          "efficientnet-b4",
-        "model_state_dict": model.state_dict(),
-        "epoch":            best_epoch,
-        "val_dice":         best_dice,
-    },
-    "backend/weights/unet_best.pth"
-)
-\end{lstlisting}
